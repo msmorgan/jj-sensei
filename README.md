@@ -2,11 +2,11 @@
 
 *Teach your agents Jujutsu.*
 
-jj-sensei is a Claude Code and Codex plugin that teaches coding agents to use
-[Jujutsu (jj)](https://jj-vcs.github.io/jj/) fluently and safely. It gives them
-the working knowledge they need for everyday jj operations, direct access to
-the manual installed on your machine, and guarded tools for the situations
-where repositories become difficult.
+jj-sensei is an Antigravity, Claude Code, and Codex plugin that teaches coding
+agents to use [Jujutsu (jj)](https://jj-vcs.github.io/jj/) fluently and safely.
+It gives them the working knowledge they need for everyday jj operations,
+direct access to the manual installed on your machine, and guarded tools for
+the situations where repositories become difficult.
 
 It does not replace jj or hide it behind a new version-control abstraction.
 Agents still use the real `jj` CLI and learn its native model.
@@ -14,8 +14,9 @@ Agents still use the real `jj` CLI and learn its native model.
 ## What it does automatically
 
 When a session starts anywhere beneath a `.jj/` directory, jj-sensei injects a
-practical startup guide. It covers the things an agent needs before its first
-command:
+practical startup guide. In Antigravity this happens before the first model
+invocation; later invocations are left alone. The guide covers the things an
+agent needs before its first command:
 
 - jj's working-copy model and the absence of a staging area
 - direct Git-to-jj equivalents for common operations
@@ -79,7 +80,11 @@ agents to bypass the guard.
 
 ## Install
 
-Register the federated `msmorgan` marketplace once, then install jj-sensei.
+### Antigravity
+
+```bash
+agy plugin install https://github.com/msmorgan/jj-sensei
+```
 
 ### Claude Code
 
@@ -100,7 +105,8 @@ Start a new session after installing or updating the plugin.
 ## Repository layout
 
 ```text
-hooks/                    jj-repo detection and startup guidance
+plugin.json, hooks.json   Antigravity plugin and hook manifests
+hooks/                    Claude hook manifest and shared startup guidance
 skills/knowledge/         version-matched access to installed jj help
 skills/harmony/           stale-state, divergence, and conflict repair
 skills/boundaries/        multi-workspace immutability setup and audit

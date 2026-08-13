@@ -1,0 +1,11 @@
+{
+  "jj-sensei-context": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "bash ./hooks/session_start.sh",
+        "timeout": 10
+      }
+    ]
+  }
+}
