@@ -10,9 +10,6 @@ import re
 import shutil
 import subprocess
 import sys
-import urllib.error
-import urllib.parse
-import urllib.request
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -95,19 +92,20 @@ class HelpSource:
             relative = self._docs[topic]
         except KeyError as error:
             raise HelpError(f"no installed manual page {topic!r}") from error
-        if self._local_docs_dir is not None:
-            return (self._local_docs_dir / relative).read_text(encoding="utf-8")
-        return self._remote_text(relative)
+        assert self._local_docs_dir is not None
+        return (self._local_docs_dir / relative).read_text(encoding="utf-8")
 
     def _load_docs_index(self) -> None:
         if self._docs is not None:
             return
         docs_dir = self._find_docs_dir()
-        if docs_dir is not None:
-            self._local_docs_dir = docs_dir
-            paths = [path.relative_to(docs_dir).as_posix() for path in docs_dir.rglob("*.md")]
-        else:
-            paths = self._remote_doc_paths()
+        if docs_dir is None:
+            raise HelpError(
+                "jj docs directory not detected. Set "
+                "JJ_SENSEI_DOCS_DIR=/path/to/jj/docs to use this feature."
+            )
+        self._local_docs_dir = docs_dir
+        paths = [path.relative_to(docs_dir).as_posix() for path in docs_dir.rglob("*.md")]
         docs: dict[str, str] = {}
         for path in paths:
             topic = _doc_topic(path)
@@ -145,43 +143,6 @@ class HelpSource:
         if match is None:
             raise HelpError("could not determine a release version for the installed jj")
         return match.group("version")
-
-    def _remote_doc_paths(self) -> list[str]:
-        tag = f"v{self._version_number()}"
-        url = f"https://api.github.com/repos/jj-vcs/jj/git/trees/{tag}?recursive=1"
-        try:
-            payload = json.loads(self._request(url))
-        except (json.JSONDecodeError, KeyError, TypeError) as error:
-            raise HelpError(f"could not read the official docs index for {tag}") from error
-        if payload.get("truncated"):
-            raise HelpError(f"official docs index for {tag} was truncated")
-        paths = [
-            item["path"].removeprefix("docs/")
-            for item in payload.get("tree", [])
-            if item.get("type") == "blob"
-            and item.get("path", "").startswith("docs/")
-            and item.get("path", "").endswith(".md")
-        ]
-        if not paths:
-            raise HelpError(f"official tag {tag} has no Markdown documentation")
-        return paths
-
-    def _remote_text(self, relative: str) -> str:
-        tag = f"v{self._version_number()}"
-        path = urllib.parse.quote(relative, safe="/")
-        return self._request(f"https://raw.githubusercontent.com/jj-vcs/jj/{tag}/docs/{path}")
-
-    @staticmethod
-    def _request(url: str) -> str:
-        request = urllib.request.Request(url, headers={"User-Agent": "jj-sensei-rtfm"})
-        try:
-            with urllib.request.urlopen(request, timeout=10) as response:
-                return response.read().decode("utf-8")
-        except (OSError, UnicodeError, urllib.error.URLError) as error:
-            raise HelpError(
-                f"packaged jj docs were not found and the version-matched official source "
-                f"could not be read: {error}"
-            ) from error
 
 
 def _docs_override() -> Path | None:

@@ -7,6 +7,7 @@ import pytest
 
 from jj_sensei import cli
 from jj_sensei.knowledge import (
+    HelpError,
     HelpSource,
     build_manifest,
     compact_keyword,
@@ -227,29 +228,18 @@ def test_explicit_docs_directory_is_read_without_platform_assumptions(tmp_path):
     assert source.doc("docs/git-experts") == GIT_EXPERTS
 
 
-def test_missing_packaged_docs_fall_back_to_the_matching_official_tag(monkeypatch):
+def test_missing_packaged_docs_explain_how_to_configure_them(monkeypatch):
     source = HelpSource(executable="jj-without-docs")
     monkeypatch.setattr(source, "_find_docs_dir", lambda: None)
-    monkeypatch.setattr(source, "_version_number", lambda: "9.9.9")
 
-    def fake_request(url):
-        if "/git/trees/v9.9.9" in url:
-            return json.dumps(
-                {
-                    "truncated": False,
-                    "tree": [
-                        {"path": "docs/git-experts.md", "type": "blob"},
-                        {"path": "docs/images/LICENSE", "type": "blob"},
-                    ],
-                }
-            )
-        assert url.endswith("/v9.9.9/docs/git-experts.md")
-        return GIT_EXPERTS
-
-    monkeypatch.setattr(source, "_request", fake_request)
-
-    assert source.doc_topics() == ["docs/git-experts"]
-    assert source.doc("docs/git-experts") == GIT_EXPERTS
+    with pytest.raises(
+        HelpError,
+        match=(
+            r"jj docs directory not detected\. Set "
+            r"JJ_SENSEI_DOCS_DIR=/path/to/jj/docs to use this feature\."
+        ),
+    ):
+        source.doc_topics()
 
 
 def test_manifest_lock_cli_is_prose_free(capsys):

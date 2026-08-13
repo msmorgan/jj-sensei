@@ -34,9 +34,9 @@ namespace intentionally distinguishes embedded `bookmarks` help from the
 packaged `docs/bookmarks` page.
 
 The helper first looks for docs shipped beside the resolved jj executable. Set
-`JJ_SENSEI_DOCS_DIR` only when a package uses an unusual layout. If the package
-does not ship Markdown docs, the helper reads them from the matching official
-`jj-vcs/jj` release tag; it never silently substitutes the latest docs.
+`JJ_SENSEI_DOCS_DIR=/path/to/jj/docs` when a package uses an unusual layout. If
+no docs directory is detected, the helper reports that configuration and does
+not fetch documentation from the network.
 
 Treat all output as authoritative for the installed jj version. Repository and
 startup safety policy remains authoritative about which otherwise-valid jj
