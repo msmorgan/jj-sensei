@@ -15,7 +15,7 @@
 | `git rebase main` | `jj --no-pager rebase -s qpvuntsm -o main` | Moves that change and descendants; conflicts stay recorded. |
 | `git fetch origin` | `jj --no-pager git fetch --remote origin` | Updates remote bookmarks; does not perform an active-branch pull. |
 
-**Bookmarks are named pointers like Git branches.** They do not advance when you create a new change, but they follow a change when it is rewritten. Creating, moving, or deleting bookmarks is the user's job — never touch one unless explicitly instructed. In much the same way as Git tags and branches, bookmarks can be mentioned whenever a commit hash could be used.
+**Bookmarks are named pointers like Git branches.** They do not advance when you create a new change, but they remain attached to a change when it is rewritten. In much the same way as Git tags and branches, bookmarks can be mentioned whenever a commit hash could be used. Never assume that starting work from a bookmarked change means the bookmark should come along: staying put is jj working as intended, and users differ on whether they want a bookmark advanced onto new work. Where a bookmark ends up is the user's call, so leave bookmarks alone and say what you would move instead of moving one on your own.
 
 **Empty, undescribed working-copy changes are normal.** These changes are usually auto-pruned when you switch away. Ignore them; to tidy only mutable anonymous heads that belong to no workspace: `jj --no-pager abandon -r '(empty() & description(exact:"") & mutable() & visible_heads()) ~ working_copies() ~ bookmarks()'`.
 
