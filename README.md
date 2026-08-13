@@ -53,8 +53,10 @@ to `harmony`, and multi-workspace safety comes from `boundaries`.
 `knowledge` reads authoritative documentation matching the installed jj
 version. An agent can ask for a command, a language topic such as revsets or
 filesets, a broader `docs/` manual page, one relevant definition, or the full
-section. The included `rtfm` helper keeps ordinary answers compact without
-vendoring a second, possibly stale copy of jj's documentation.
+section. The included `rtfm` helper reads executable help, while `rtfd`
+navigates Markdown pages and referenced YAML tables, including field-aware
+search by Git command. Both keep ordinary answers compact without vendoring a
+second, possibly stale copy of jj's documentation.
 
 Command and language help comes from the local executable. Manual pages come
 from the package when detected, or from an explicit `JJ_SENSEI_DOCS_DIR` for

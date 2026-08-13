@@ -187,34 +187,21 @@ def test_command_defaults_short_and_full_is_explicit(capsys):
     assert capsys.readouterr().out == "short help for log\nlong help for log\n"
 
 
-def test_list_discovers_topics_without_hard_coding(capsys):
+def test_list_discovers_executable_help_without_hard_coding(capsys):
     assert run_help(["--list"], FakeSource()) == 0
     output = capsys.readouterr().out
     assert "filesets" in output
-    assert "docs/git-experts" in output
     assert "jj log" in output
+    assert "docs/git-experts" not in output
 
 
-def test_manual_pages_use_an_explicit_docs_namespace(capsys):
-    source = FakeSource()
-
-    assert run_help(["docs/git-experts"], source) == 0
-    compact = capsys.readouterr().out
-    assert "Why Git experts may prefer Jujutsu" in compact
-    assert "Available sections" in compact
-    assert "Use `jj evolog`" not in compact
-
-    assert run_help(["docs/git-experts", "--search", "evolution"], source) == 0
-    assert "Use `jj evolog`" in capsys.readouterr().out
-
-
-def test_embedded_keyword_wins_while_docs_collision_stays_addressable(capsys):
+def test_embedded_keyword_is_addressed_without_a_docs_collision(capsys):
     source = FakeSource()
 
     assert run_help(["bookmarks", "--full"], source) == 0
     assert capsys.readouterr().out.startswith("# Bookmarks keyword")
-    assert run_help(["docs/bookmarks", "--full"], source) == 0
-    assert capsys.readouterr().out.startswith("# Bookmarks manual")
+    assert run_help(["docs/bookmarks", "--full"], source) == 2
+    assert "no help keyword or canonical command path" in capsys.readouterr().err
 
 
 def test_explicit_docs_directory_is_read_without_platform_assumptions(tmp_path):
@@ -282,7 +269,11 @@ def test_manifest_modes_are_mutually_exclusive(capsys):
     assert "must be used by itself" in capsys.readouterr().err
 
 
-def test_package_cli_forwards_rtfm_options(monkeypatch):
+@pytest.mark.parametrize(
+    ("command", "module"),
+    [("rtfm", "knowledge"), ("rtfd", "documentation")],
+)
+def test_package_cli_forwards_documentation_options(monkeypatch, command, module):
     received = None
 
     def fake_main(args):
@@ -290,8 +281,8 @@ def test_package_cli_forwards_rtfm_options(monkeypatch):
         received = args
         return 17
 
-    monkeypatch.setattr(cli.knowledge, "main", fake_main)
-    assert cli.main(["rtfm", "--list"]) == 17
+    monkeypatch.setattr(getattr(cli, module), "main", fake_main)
+    assert cli.main([command, "--list"]) == 17
     assert received == ["--list"]
 
 

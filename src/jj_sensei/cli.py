@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import conflicts, interpolate, knowledge, use_utf8_output
+from . import conflicts, documentation, interpolate, knowledge, use_utf8_output
 from .repair import run_converge, run_repair, run_resolve
 from .setup import run_setup
 from .status import run_status
@@ -63,6 +63,8 @@ def parser() -> argparse.ArgumentParser:
     conflict_parser.add_argument("args", nargs=argparse.REMAINDER)
     rtfm_parser = commands.add_parser("rtfm", help="read the installed jj documentation")
     rtfm_parser.add_argument("args", nargs=argparse.REMAINDER)
+    rtfd_parser = commands.add_parser("rtfd", help="read Markdown docs shipped with jj")
+    rtfd_parser.add_argument("args", nargs=argparse.REMAINDER)
     interpolate_parser = commands.add_parser(
         "interpolate",
         help="construct an intermediate state inside a revision edge",
@@ -76,6 +78,8 @@ def main(argv: list[str] | None = None) -> int:
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     if raw_argv[:1] == ["rtfm"]:
         return knowledge.main(raw_argv[1:])
+    if raw_argv[:1] == ["rtfd"]:
+        return documentation.main(raw_argv[1:])
     if raw_argv[:1] == ["conflicts"]:
         return conflicts.main(raw_argv[1:])
     if raw_argv[:1] == ["interpolate"]:
@@ -95,6 +99,8 @@ def main(argv: list[str] | None = None) -> int:
         return conflicts.main(args.args)
     if args.command == "rtfm":
         return knowledge.main(args.args)
+    if args.command == "rtfd":
+        return documentation.main(args.args)
     if args.command == "interpolate":
         return interpolate.main(args.args)
     raise AssertionError(args.command)

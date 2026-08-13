@@ -12,7 +12,7 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from . import use_utf8_output
 
@@ -109,6 +109,28 @@ class HelpSource:
             raise HelpError(f"no installed manual page {topic!r}") from error
         assert self._local_docs_dir is not None
         return (self._local_docs_dir / relative).read_text(encoding="utf-8")
+
+    def doc_asset(self, topic: str, *, suffixes: set[str]) -> str:
+        """Read one canonical docs/ asset without permitting path traversal."""
+        self._load_docs_index()
+        relative = PurePosixPath(topic)
+        if (
+            relative.is_absolute()
+            or not relative.parts
+            or relative.parts[0] != "docs"
+            or ".." in relative.parts
+            or relative.suffix not in suffixes
+        ):
+            expected = ", ".join(sorted(suffixes))
+            raise HelpError(
+                f"manual asset must be a canonical docs/ path with suffix {expected}: {topic!r}"
+            )
+        assert self._local_docs_dir is not None
+        root = self._local_docs_dir.resolve()
+        path = root.joinpath(*relative.parts[1:]).resolve()
+        if not path.is_relative_to(root) or not path.is_file():
+            raise HelpError(f"no installed manual asset {topic!r}")
+        return path.read_text(encoding="utf-8")
 
     def docs_version_warning(self) -> str | None:
         """Describe a detected mismatch for an explicitly configured docs tree."""
@@ -215,13 +237,13 @@ def _doc_topic(relative: str) -> str:
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
         prog="rtfm",
-        description="Read help and manual pages matching the installed jj version.",
+        description="Read command and keyword help from the installed jj executable.",
     )
     result.add_argument("topic", nargs="*", help="help keyword or canonical command path")
     result.add_argument(
         "--full",
         action="store_true",
-        help="print the complete command help, keyword help, or manual page",
+        help="print the complete command or keyword help",
     )
     result.add_argument(
         "--search",
@@ -231,7 +253,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument(
         "--list",
         action="store_true",
-        help="list help keywords, manual pages, and canonical command paths",
+        help="list help keywords and canonical command paths",
     )
     result.add_argument(
         "--manifest",
@@ -263,13 +285,13 @@ def run_help(argv: list[str] | None, source: HelpSource) -> int:
         if args.manifest:
             _require_standalone(args, "manifest")
             manifest = build_manifest(source)
-            _warn_about_docs_version(source)
+            warn_about_docs_version(source)
             print(json.dumps(manifest, indent=2, sort_keys=True))
             return 0
         if args.manifest_lock:
             _require_standalone(args, "manifest_lock")
             manifest = manifest_lock(build_manifest(source))
-            _warn_about_docs_version(source)
+            warn_about_docs_version(source)
             print(json.dumps(manifest, indent=2, sort_keys=True))
             return 0
         if args.check_manifest:
@@ -278,7 +300,6 @@ def run_help(argv: list[str] | None, source: HelpSource) -> int:
         if args.list:
             _require_standalone(args, "list")
             topics = render_topic_list(source)
-            _warn_about_docs_version(source)
             print(topics, end="")
             return 0
         if not args.topic:
@@ -287,40 +308,6 @@ def run_help(argv: list[str] | None, source: HelpSource) -> int:
             return 2
 
         requested = " ".join(args.topic)
-        if requested.startswith("docs/"):
-            if len(args.topic) != 1:
-                print("rtfm: manual page topics cannot contain spaces", file=sys.stderr)
-                return 2
-            topics = set(source.doc_topics())
-            _warn_about_docs_version(source)
-            if requested not in topics:
-                print(f"rtfm: no installed manual page {requested!r}", file=sys.stderr)
-                return 2
-            output = source.doc(requested)
-            if args.search:
-                selected = extract_relevant(output, args.search)
-                if selected is None:
-                    print(
-                        f"rtfm: no {args.search!r} section or definition in {requested!r}",
-                        file=sys.stderr,
-                    )
-                    return 2
-                print(selected, end="")
-                return 0
-            if args.full:
-                print(output, end="")
-                return 0
-            compact = compact_keyword(requested, output)
-            if compact is None:
-                print(
-                    "rtfm: installed jj manual page has an unfamiliar structure; showing it in full",
-                    file=sys.stderr,
-                )
-                print(output, end="")
-            else:
-                print(compact, end="")
-            return 0
-
         keywords = available_keywords(source)
         if len(args.topic) == 1 and args.topic[0] in keywords:
             output = source.keyword(args.topic[0])
@@ -352,7 +339,7 @@ def run_help(argv: list[str] | None, source: HelpSource) -> int:
         requested_path = "" if requested == "jj" else requested
         if requested_path not in command_paths:
             print(
-                f"rtfm: no help keyword, docs/ page, or canonical command path {requested!r}",
+                f"rtfm: no help keyword or canonical command path {requested!r}",
                 file=sys.stderr,
             )
             return 2
@@ -374,7 +361,7 @@ def run_help(argv: list[str] | None, source: HelpSource) -> int:
         return 2
 
 
-def _warn_about_docs_version(source: object) -> None:
+def warn_about_docs_version(source: object, *, program: str = "rtfm") -> None:
     check = getattr(source, "docs_version_warning", None)
     if check is None:
         return
@@ -383,7 +370,7 @@ def _warn_about_docs_version(source: object) -> None:
     except HelpError:
         return
     if warning is not None:
-        print(f"rtfm: warning: {warning}", file=sys.stderr)
+        print(f"{program}: warning: {warning}", file=sys.stderr)
 
 
 def _require_standalone(args: argparse.Namespace, selected: str) -> None:
@@ -433,16 +420,9 @@ def render_topic_list(source: HelpSource) -> str:
     keywords = available_keywords(source)
     commands = parse_command_sections(source.markdown_help())
     rendered_commands = ["jj" if not path else f"jj {path}" for path in commands]
-    try:
-        docs = source.doc_topics()
-        rendered_docs = "\n  ".join(docs)
-    except HelpError as error:
-        rendered_docs = f"[unavailable: {error}]"
     return (
         "Help keywords:\n  "
         + "\n  ".join(keywords)
-        + "\n\nManual pages:\n  "
-        + rendered_docs
         + "\n\nCanonical command paths:\n  "
         + "\n  ".join(rendered_commands)
         + "\n"
