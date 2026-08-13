@@ -1,6 +1,6 @@
 ---
 name: wisdom
-description: Recognize useful Jujutsu history-shaping idioms and uncommon scenarios, then route to focused guidance or guarded techniques. Use when splitting mixed work, selecting precise revisions with revsets, placing or reordering changes with split/rebase, naming an exact graph edge, or constructing an intermediate state between commits when doing so is not a matter of selecting files and lines.
+description: Recognize useful Jujutsu history-shaping idioms and uncommon scenarios, then route to focused guidance or guarded techniques. Use when splitting mixed work, reconstructing an oversized working-copy change from its evolution log, selecting precise revisions with revsets, placing or reordering changes with split/rebase, naming an exact graph edge, or constructing an intermediate state between commits when doing so is not a matter of selecting files and lines.
 ---
 
 # Apply Jujutsu Wisdom
@@ -13,6 +13,10 @@ paths from this loaded `SKILL.md`, not from the repository being edited.
   must be recreated at that state.”** Read
   [Interpolate a change](references/interpolate.md) for the guarded escape
   hatch; use ordinary `jj split` whenever selection is sufficient.
+- **“I made far too many changes in `@`, and they should have been a series of
+  commits.”** Not all hope is lost. Read
+  [Reconstruct work with evolog](references/using-evolog.md) to recover the
+  agent's ordered edits and choose coherent commit boundaries.
 - **“I want these selected files to become the later change, not the earlier
   one.”** Read [Place changes deliberately](references/placement.md).
 - **“I know what this change should be after or before—or exactly which graph

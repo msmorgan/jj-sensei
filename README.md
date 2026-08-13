@@ -101,6 +101,12 @@ revsets—including `ROOT::` for a subtree—and previews nontrivial selections
 before mutation. For ordinary insertion and reordering it prefers `-A`/`-B`;
 `-o` is reserved for intentional forks and merges.
 
+Because the live-status hook snapshots after agent tools, `wisdom` can also use
+`jj evolog` to recover the ordered patches inside an oversized `@` and rebuild
+them as a coherent series of commits. The snapshots preserve execution history;
+the agent still chooses semantic boundaries rather than treating every tool call
+as a commit.
+
 Its guarded escape hatch is interpolation: turning one mixed change into two
 by constructing an intermediate state between two commits when doing so is not
 a matter of selecting files and lines—for example, because generated artifacts
