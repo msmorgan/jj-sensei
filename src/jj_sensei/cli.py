@@ -5,7 +5,15 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import conflicts, documentation, interpolate, knowledge, use_utf8_output
+from . import (
+    conflicts,
+    documentation,
+    immutability,
+    interpolate,
+    knowledge,
+    recovery,
+    use_utf8_output,
+)
 from .repair import run_converge, run_repair, run_resolve
 from .setup import run_setup
 from .status import run_status
@@ -82,6 +90,16 @@ def parser() -> argparse.ArgumentParser:
         help="construct a state that files-and-lines selection cannot express",
     )
     interpolate_parser.add_argument("args", nargs=argparse.REMAINDER)
+    why_immutable_parser = commands.add_parser(
+        "why-immutable",
+        help="report which immutable_heads() clause captures a revision",
+    )
+    why_immutable_parser.add_argument("args", nargs=argparse.REMAINDER)
+    recover_file_parser = commands.add_parser(
+        "recover-file",
+        help="read a file's earlier content out of operation snapshots",
+    )
+    recover_file_parser.add_argument("args", nargs=argparse.REMAINDER)
     return result
 
 
@@ -96,6 +114,10 @@ def main(argv: list[str] | None = None) -> int:
         return conflicts.main(raw_argv[1:])
     if raw_argv[:1] == ["interpolate"]:
         return interpolate.main(raw_argv[1:])
+    if raw_argv[:1] == ["why-immutable"]:
+        return immutability.main(raw_argv[1:])
+    if raw_argv[:1] == ["recover-file"]:
+        return recovery.main(raw_argv[1:])
     args = parser().parse_args(raw_argv)
     if args.command == "repair":
         return run_repair()
@@ -115,6 +137,10 @@ def main(argv: list[str] | None = None) -> int:
         return documentation.main(args.args)
     if args.command == "interpolate":
         return interpolate.main(args.args)
+    if args.command == "why-immutable":
+        return immutability.main(args.args)
+    if args.command == "recover-file":
+        return recovery.main(args.args)
     raise AssertionError(args.command)
 
 

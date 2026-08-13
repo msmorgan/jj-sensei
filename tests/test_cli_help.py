@@ -27,6 +27,10 @@ PACKAGED_COMMANDS = [
     ["interpolate", "begin"],
     ["interpolate", "finish"],
     ["interpolate", "abort"],
+    ["why-immutable"],
+    ["recover-file"],
+    ["recover-file", "list"],
+    ["recover-file", "show"],
 ]
 
 SKILL_COMMANDS = [
@@ -45,6 +49,10 @@ SKILL_COMMANDS = [
     [str(WISDOM / "interpolate"), "begin"],
     [str(WISDOM / "interpolate"), "finish"],
     [str(WISDOM / "interpolate"), "abort"],
+    [str(WISDOM / "why-immutable")],
+    [str(HARMONY / "recover-file")],
+    [str(HARMONY / "recover-file"), "list"],
+    [str(HARMONY / "recover-file"), "show"],
 ]
 
 

@@ -83,6 +83,29 @@ assuming whether that bookmark should move, remain, or be deleted. It also
 refuses genuinely different nonempty trees and candidates owned by another
 workspace.
 
+## Recovering a file from an operation snapshot
+
+When content was lost rather than conflicted, read it back out of the
+operation log instead of restoring the repository to an earlier operation:
+
+```bash
+"<skill-dir>/scripts/recover-file" list PATH
+"<skill-dir>/scripts/recover-file" list -n 200 PATH
+"<skill-dir>/scripts/recover-file" show OPERATION PATH
+```
+
+`list` walks `jj op log` for operations that snapshotted the working copy,
+reads `PATH` at each, and reports only the operations where its content
+changed. `show` prints one of those states; redirect or copy it forward as an
+ordinary edit.
+
+Both subcommands are strictly read-only — they load the repository at an
+operation and never restore it. Only snapshotted states exist: jj snapshots on
+ordinary commands and after agent tool calls, so edits made and overwritten
+between two snapshots were never recorded and cannot be recovered here. For
+earlier versions of a change that still exists, `jj --no-pager evolog` is the
+better tool.
+
 ## Inspecting and resolving marker content
 
 The `conflicts` helper supports jj's default `diff+snapshot` marker style:

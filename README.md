@@ -82,6 +82,10 @@ diagnosis when human judgment is required. Narrower tools are included for
 inspecting conflict markers, accepting a specifically chosen representation,
 and running conservative mechanical resolutions.
 
+A read-only recovery helper reads one file's earlier content out of jj's
+operation snapshots, reporting only the operations where that content actually
+changed. It loads the repository at an operation and never restores it.
+
 It never performs operation-log surgery or bypasses immutability. Within a
 repair invocation, an internal error preserves the journal and prevents later
 transaction steps; it does not turn ordinary jj command errors into a reason to
@@ -89,9 +93,15 @@ stop and ask for permission.
 
 ### wisdom
 
-`wisdom` recognizes uncommon history-shaping situations and routes each one to
-a focused technique. Its entry point is a compact scenario index rather than a
-general tutorial or a long sequence of commands.
+`wisdom` recognizes history-shaping situations and routes each one to a
+focused technique. Its entry point is a compact index keyed on what a user
+actually asked for—move this fix into that commit, undo this, publish this,
+reorder these—rather than a general tutorial or a long sequence of commands.
+
+When jj refuses an operation as immutable, a read-only helper reports which
+clause of the active `immutable_heads()` definition captures the revision and
+which bookmark or tag anchors that clause, so the refusal can be explained
+rather than worked around.
 
 It also records small, high-leverage idioms that are easy to miss in the full
 manual: choosing whether a selected fileset becomes the earlier or later half

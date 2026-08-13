@@ -57,6 +57,10 @@ jj --no-pager --at-op OP_ID log -r 'all()' -T builtin_log_oneline
 then. Copy the recovered content forward as an ordinary edit. Never use `op
 restore` or `op revert` to move the repository back.
 
+The `harmony` skill's `recover-file` helper automates that walk for one path:
+it finds the snapshot operations whose content differs and prints any one of
+them. States that were never snapshotted are not recoverable by any route.
+
 ## Immutable-target triage
 
 An immutability refusal is information about the request, not an obstacle to
