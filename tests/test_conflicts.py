@@ -3,7 +3,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from jj_sensei import conflicts
+import pytest
+
+from jj_sensei import conflicts, jj
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFLICTS = ROOT / "skills" / "harmony" / "scripts" / "conflicts"
@@ -214,15 +216,25 @@ def _run(*args, env_overrides=None):
     )
 
 
-def test_list_normalizes_no_conflicts_to_empty_success(monkeypatch, capsys):
+def _stub_jj(monkeypatch, returncode, stdout, stderr):
     result = subprocess.CompletedProcess(
-        args=["jj"], returncode=2, stdout="", stderr="Error: No conflicts found at this revision\n"
+        args=["jj"], returncode=returncode, stdout=stdout, stderr=stderr
     )
-    monkeypatch.setattr(conflicts.subprocess, "run", lambda *args, **kwargs: result)
-    conflicts.cmd_list([])
+    monkeypatch.setattr(jj.subprocess, "run", lambda *args, **kwargs: result)
+
+
+def test_list_normalizes_no_conflicts_to_empty_success(monkeypatch, capsys):
+    _stub_jj(monkeypatch, 2, "", "Error: No conflicts found at this revision\n")
+    assert conflicts.cmd_list([]) == 0
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == ""
+
+
+def test_list_reports_a_real_jj_failure(monkeypatch, capsys):
+    _stub_jj(monkeypatch, 2, "", 'Error: There is no jj repo in "."\n')
+    assert conflicts.cmd_list([]) == 2
+    assert "no jj repo" in capsys.readouterr().err
 
 
 def test_auto_resolves_qualifying_file(tmp_path):
@@ -438,3 +450,31 @@ def test_non_utf8_locale_still_reads_utf8_content(tmp_path):
     )
     assert r.returncode == 0, r.stderr
     assert f.read_text(encoding="utf-8") == EXPECTED.replace("import eee", "import éee")
+
+
+# --- `jj resolve --list` row parsing ----------------------------------------
+
+
+def test_conflict_path_survives_a_longer_description():
+    # A delete/modify conflict adds words to the description; a fixed word count
+    # would return a path that does not exist and skip the file silently.
+    assert jj.parse_conflict_path("del.txt    2-sided conflict including 1 deletion") == "del.txt"
+    assert (
+        jj.parse_conflict_path("exe.txt    2-sided conflict including an executable") == "exe.txt"
+    )
+
+
+def test_conflict_path_keeps_internal_spaces():
+    assert jj.parse_conflict_path("a b.txt    2-sided conflict") == "a b.txt"
+    assert jj.parse_conflict_path("a  b.txt    3-sided conflict") == "a  b.txt"
+
+
+def test_conflict_path_refuses_an_unreadable_row():
+    with pytest.raises(RuntimeError, match="could not read a path"):
+        jj.parse_conflict_path("something entirely unexpected")
+
+
+def test_conflict_files_parses_every_row(monkeypatch):
+    listing = "a b.txt    2-sided conflict\ndel.txt    2-sided conflict including 1 deletion\n"
+    _stub_jj(monkeypatch, 0, listing, "")
+    assert jj.Jj().conflict_files() == ["a b.txt", "del.txt"]

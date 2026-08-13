@@ -238,3 +238,29 @@ def test_workspace_lock_times_out_while_held(tmp_path):
                 raise AssertionError("second lock unexpectedly succeeded")
         except LockTimeout:
             pass
+
+
+def test_repair_handles_a_delete_modify_conflict(jj_repo):
+    """`jj resolve --list` describes this one as "2-sided conflict including 1
+    deletion". Reading the path back as a fixed word count yields a file that
+    does not exist, which used to abort the whole repair."""
+    assert run_setup(jj_repo.root) == 0
+    feature = jj_repo.add_workspace("feature")
+
+    (jj_repo.root / "f.txt").unlink()
+    jj_repo.commit(jj_repo.root, "trunk deletes f.txt")
+    jj_repo.write(feature, "f.txt", "feature\n")
+    jj_repo.commit(feature, "feature edits f.txt")
+    jj_repo.run(feature, "rebase", "-s", "roots(default@..@)", "-d", "default@-")
+
+    listing = Jj(feature).run("resolve", "--list").stdout
+    assert "including 1 deletion" in listing
+    assert Jj(feature).conflict_files() == ["f.txt"]
+
+    # Stops for a human edit rather than dying on a path it could not read.
+    assert run_repair(feature) == 1
+    assert StateStore(feature).load().phase == "editing"
+
+    jj_repo.write(feature, "f.txt", "feature\n")
+    assert run_repair(feature) == 0
+    assert Jj(feature).commits("::@ & conflicts()") == []

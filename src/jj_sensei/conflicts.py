@@ -22,33 +22,34 @@ jj-sensei conflict helper for jj repos using the default diff+snapshot marker fo
 import argparse
 import json
 import re
-import subprocess
 import sys
 from collections import Counter
 from difflib import SequenceMatcher
 from pathlib import Path
 
 from . import use_utf8_output
-
-JJ = "jj"
+from .jj import Jj, JjError
 
 _START = re.compile(r"^(<{7,}) conflict (\d+) of (\d+)$")
 _GENERIC_START = re.compile(r"^<{7,}", re.MULTILINE)
 _LINE = re.compile(r"[^\r\n]*(?:\r\n|\r|\n)|[^\r\n]+")
 
 
-def _project_root():
-    d = Path.cwd()
+def workspace_root(start=None):
+    """Find the workspace containing `start`, or None.
+
+    Derived from the path in hand rather than cached at import time, so the
+    answer cannot go stale when the process changes directory — and so a file
+    outside any workspace is reported as such instead of being described
+    relative to wherever the process happened to start.
+    """
+    directory = Path(start or Path.cwd()).resolve()
     while True:
-        if (d / ".jj").exists():
-            return d
-        if d == d.parent:
-            break
-        d = d.parent
-    return Path.cwd()
-
-
-PROJECT_ROOT = _project_root()
+        if (directory / ".jj").exists():
+            return directory
+        if directory == directory.parent:
+            return None
+        directory = directory.parent
 
 
 # ---------------------------------------------------------------------------
@@ -106,8 +107,9 @@ def parse_file(path):
             while j < len(lines) and not lines[j].startswith(end_pfx + " conflict"):
                 j += 1
             sides = _parse_sides(lines[i + 1 : j], n)
+            root = workspace_root(path.parent)
             try:
-                file_str = str(path.relative_to(PROJECT_ROOT))
+                file_str = str(path.resolve().relative_to(root)) if root else str(path)
             except ValueError:
                 file_str = str(path)
             hunks.append(
@@ -342,16 +344,15 @@ def _sorted_merge_resolution(hunk, lines):
 
 
 def _conflicted_files():
-    r = subprocess.run(
-        [JJ, "--no-pager", "resolve", "--list"], capture_output=True, text=True, cwd=PROJECT_ROOT
-    )
-    return [line.rsplit(maxsplit=2)[0] for line in r.stdout.splitlines() if line.strip()]
+    return Jj().conflict_files()
 
 
 def _resolve_path(filepath):
-    for p in (PROJECT_ROOT / filepath, Path(filepath)):
-        if p.exists():
-            return p
+    root = workspace_root()
+    candidates = [Path(filepath)] if root is None else [root / filepath, Path(filepath)]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
     return None
 
 
@@ -375,22 +376,18 @@ def _resolve_targets(files):
 
 
 def cmd_list(_args):
-    r = subprocess.run(
-        [JJ, "--no-pager", "resolve", "--list"], capture_output=True, text=True, cwd=PROJECT_ROOT
-    )
-    sys.stdout.write(r.stdout)
-    if r.returncode and not r.stdout:
-        if "No conflicts found" in r.stderr:
-            return
-        sys.stderr.write(r.stderr)
-        sys.exit(r.returncode)
+    result = Jj().resolve_list()
+    sys.stdout.write(result.stdout)
+    if result.returncode:
+        sys.stderr.write(result.stderr)
+    return result.returncode
 
 
 def cmd_show(args):
     as_json = "--json" in args
     targets = _resolve_targets([a for a in args if a != "--json"])
     if targets is None:
-        return
+        return 0
 
     all_hunks = []
     unsupported = []
@@ -410,13 +407,11 @@ def cmd_show(args):
                 f"Unsupported conflict marker style in {filepath}; inspect it manually.",
                 file=sys.stderr,
             )
-        if unsupported:
-            sys.exit(1)
-        return
+        return 1 if unsupported else 0
 
     if not all_hunks and not unsupported:
         print("No conflict hunks found.")
-        return
+        return 0
 
     for h in all_hunks:
         print("─" * 64)
@@ -435,8 +430,7 @@ def cmd_show(args):
             f"Unsupported conflict marker style in {filepath}; inspect it manually.",
             file=sys.stderr,
         )
-    if unsupported:
-        sys.exit(1)
+    return 1 if unsupported else 0
 
 
 def cmd_accept(args):
@@ -445,20 +439,20 @@ def cmd_accept(args):
             "Usage: scripts/conflicts accept FILE snapshot|diff|base|stack|stack-snap-first|sort",
             file=sys.stderr,
         )
-        sys.exit(1)
+        return 1
     filepath, side = args[0], args[1]
     valid = ("snapshot", "diff", "base", "stack", "stack-snap-first", "sort")
     if side not in valid:
         print(f"Unknown side '{side}'. Choose: {', '.join(valid)}", file=sys.stderr)
-        sys.exit(1)
+        return 1
     path = _resolve_path(filepath)
     if path is None:
         print(f"Not found: {filepath}", file=sys.stderr)
-        sys.exit(1)
+        return 1
     if side == "sort":
         resolved, left = _auto_resolve_file(path, filepath, dry=False)
         print(f"  ---\n  resolved {resolved} hunk(s), {left} left for review")
-        return
+        return 0
     hunks, lines = parse_file(path)
     if not hunks:
         if _has_unparsed_conflict(path, hunks):
@@ -466,9 +460,9 @@ def cmd_accept(args):
                 f"Unsupported conflict marker style in {filepath}; resolve it by hand.",
                 file=sys.stderr,
             )
-            sys.exit(1)
+            return 1
         print(f"No conflicts in {filepath}")
-        return
+        return 0
 
     key_map = {"snapshot": "snapshot", "diff": "diff_side", "base": "diff_base"}
     resolved = skipped = 0
@@ -504,8 +498,7 @@ def cmd_accept(args):
         _write_source(path, "".join(lines))
     left = f", {skipped} unsupported hunk(s) left" if skipped else ""
     print(f"Resolved {resolved} hunk(s) in {filepath} (accepted {side} side){left}.")
-    if skipped:
-        sys.exit(1)
+    return 1 if skipped else 0
 
 
 def _report(filepath, hunk, status, msg):
@@ -552,7 +545,7 @@ def cmd_auto(args):
     dry = "--dry-run" in args
     targets = _resolve_targets([a for a in args if not a.startswith("--")])
     if targets is None:
-        return
+        return 0
     total_resolved = total_left = 0
     for filepath, path in targets:
         resolved, left = _auto_resolve_file(path, filepath, dry)
@@ -561,6 +554,8 @@ def cmd_auto(args):
     print("  ---")
     suffix = " (dry-run, nothing written)" if dry else ""
     print(f"  resolved {total_resolved} hunk(s), {total_left} left for review{suffix}")
+    # Hunks left for review are the conservative outcome, not a failure.
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -637,17 +632,24 @@ def main(argv=None):
         command_parser.print_help()
         return 1
     args = command_parser.parse_args(argv)
-    if args.command == "list":
-        cmd_list([])
-    elif args.command == "show":
-        cmd_show((["--json"] if args.json else []) + args.files)
-    elif args.command == "accept":
-        cmd_accept([args.file, args.strategy])
-    elif args.command == "auto":
-        cmd_auto((["--dry-run"] if args.dry_run else []) + args.files)
-    else:
-        raise AssertionError(args.command)
-    return 0
+    try:
+        if args.command == "list":
+            return cmd_list([])
+        if args.command == "show":
+            return cmd_show((["--json"] if args.json else []) + args.files)
+        if args.command == "accept":
+            return cmd_accept([args.file, args.strategy])
+        if args.command == "auto":
+            return cmd_auto((["--dry-run"] if args.dry_run else []) + args.files)
+    except JjError as error:
+        print(f"conflicts: {error}", file=sys.stderr)
+        if error.stderr.strip():
+            print(error.stderr.rstrip(), file=sys.stderr)
+        return 2
+    except (OSError, RuntimeError) as error:
+        print(f"conflicts: {error}", file=sys.stderr)
+        return 2
+    raise AssertionError(args.command)
 
 
 if __name__ == "__main__":
