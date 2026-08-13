@@ -1,0 +1,4 @@
+interface:
+  display_name: "Wisdom"
+  short_description: "Recognize uncommon jj history-shaping scenarios"
+  default_prompt: "Use $wisdom to recognize this uncommon Jujutsu history-shaping scenario and route to the guarded technique that fits it."

@@ -31,10 +31,10 @@ Git repository. Outside a jj repository, the hook emits nothing.
 
 ## Skills
 
-Three skills ship today. They are meant to feel like parts of one lesson:
+Four skills ship today. They are meant to feel like parts of one lesson:
 routine work begins with the injected guidance, uncertainty goes to
-`knowledge`, repository trouble goes to `harmony`, and multi-workspace safety
-comes from `boundaries`.
+`knowledge`, uncommon history shaping goes to `wisdom`, repository trouble goes
+to `harmony`, and multi-workspace safety comes from `boundaries`.
 
 ### knowledge
 
@@ -65,6 +65,19 @@ and running conservative mechanical resolutions.
 
 It never performs operation-log surgery, bypasses immutability, or silently
 continues after a failed jj command.
+
+### wisdom
+
+`wisdom` recognizes uncommon history-shaping situations and routes each one to
+a focused technique. Its entry point is a compact scenario index rather than a
+general tutorial or a long sequence of commands.
+
+The first technique is interpolation: turning one mixed change into two when
+the desired intermediate content cannot be selected from the existing diff—for
+example, because generated artifacts must be recreated at the earlier logical
+state. Its guarded helper inserts a described change into an explicitly named
+`-A`/`-B` edge, journals every transition, supports merge edges, and can finish
+or abort after an interrupted process without operation-log recovery.
 
 ### boundaries
 
@@ -109,6 +122,7 @@ Start a new session after installing or updating the plugin.
 plugin.json, hooks.json   Antigravity plugin and hook manifests
 hooks/                    Claude hook manifest and shared startup guidance
 skills/knowledge/         version-matched access to installed jj help
+skills/wisdom/            guarded techniques for uncommon history shaping
 skills/harmony/           stale-state, divergence, and conflict repair
 skills/boundaries/        multi-workspace immutability setup and audit
 src/jj_sensei/            shared Python implementation

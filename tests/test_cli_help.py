@@ -7,6 +7,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 HARMONY = ROOT / "skills" / "harmony" / "scripts"
+WISDOM = ROOT / "skills" / "wisdom" / "scripts"
 
 PACKAGED_COMMANDS = [
     [],
@@ -20,6 +21,10 @@ PACKAGED_COMMANDS = [
     ["conflicts", "show"],
     ["conflicts", "accept"],
     ["conflicts", "auto"],
+    ["interpolate"],
+    ["interpolate", "begin"],
+    ["interpolate", "finish"],
+    ["interpolate", "abort"],
 ]
 
 SKILL_COMMANDS = [
@@ -33,6 +38,10 @@ SKILL_COMMANDS = [
     [str(HARMONY / "conflicts"), "auto"],
     [str(ROOT / "skills" / "boundaries" / "scripts" / "setup-immutability")],
     [str(ROOT / "skills" / "knowledge" / "scripts" / "rtfm")],
+    [str(WISDOM / "interpolate")],
+    [str(WISDOM / "interpolate"), "begin"],
+    [str(WISDOM / "interpolate"), "finish"],
+    [str(WISDOM / "interpolate"), "abort"],
 ]
 
 

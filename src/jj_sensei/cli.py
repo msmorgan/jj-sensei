@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import conflicts, knowledge, use_utf8_output
+from . import conflicts, interpolate, knowledge, use_utf8_output
 from .repair import run_converge, run_repair, run_resolve
 from .setup import run_setup
 
@@ -53,6 +53,11 @@ def parser() -> argparse.ArgumentParser:
     conflict_parser.add_argument("args", nargs=argparse.REMAINDER)
     rtfm_parser = commands.add_parser("rtfm", help="read the installed jj documentation")
     rtfm_parser.add_argument("args", nargs=argparse.REMAINDER)
+    interpolate_parser = commands.add_parser(
+        "interpolate",
+        help="construct an intermediate state inside a revision edge",
+    )
+    interpolate_parser.add_argument("args", nargs=argparse.REMAINDER)
     return result
 
 
@@ -63,6 +68,8 @@ def main(argv: list[str] | None = None) -> int:
         return knowledge.main(raw_argv[1:])
     if raw_argv[:1] == ["conflicts"]:
         return conflicts.main(raw_argv[1:])
+    if raw_argv[:1] == ["interpolate"]:
+        return interpolate.main(raw_argv[1:])
     args = parser().parse_args(raw_argv)
     if args.command == "repair":
         return run_repair()
@@ -76,6 +83,8 @@ def main(argv: list[str] | None = None) -> int:
         return conflicts.main(args.args)
     if args.command == "rtfm":
         return knowledge.main(args.args)
+    if args.command == "interpolate":
+        return interpolate.main(args.args)
     raise AssertionError(args.command)
 
 

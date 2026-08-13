@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+"""Run jj-sensei's interpolation state machine from an unpacked plugin."""
+
+import sys
+from pathlib import Path
+
+PLUGIN_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(PLUGIN_ROOT / "src"))
+
+from jj_sensei.cli import main  # noqa: E402
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(["interpolate", *sys.argv[1:]]))
