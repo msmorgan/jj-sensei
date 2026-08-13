@@ -150,14 +150,19 @@ Start a new session after installing or updating the plugin.
 
 ## Repository layout
 
+Each host discovers the plugin through its own manifest, and none of them is
+referenced by any code in this repository. The hooks, skills, and Python behind
+them are shared.
+
 ```text
-plugin.json, hooks.json   Antigravity plugin and hook manifests
-hooks/                    startup guidance and cross-host live status hooks
-skills/knowledge/         version-matched access to installed jj help
-skills/wisdom/            guarded techniques for uncommon history shaping
-skills/harmony/           stale-state, divergence, and conflict repair
-skills/boundaries/        multi-workspace immutability setup and audit
-src/jj_sensei/            shared Python implementation
+plugin.json                 Antigravity plugin manifest
+hooks.json                  Antigravity hook manifest
+.claude-plugin/plugin.json  Claude Code plugin manifest
+.codex-plugin/plugin.json   Codex plugin manifest
+hooks/hooks.json            hook manifest for Claude Code and Codex
+hooks/                      startup guidance and live status hook scripts
+skills/                     the four skills above, loaded by every host
+src/jj_sensei/              shared Python implementation
 ```
 
 For local package development:
