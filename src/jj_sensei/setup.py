@@ -86,10 +86,14 @@ def run_setup(cwd: Path | str | None = None, *, check_only: bool = False) -> int
 
 
 def _verify_default_context(jj: Jj) -> None:
-    protected = jj.commits("working_copies() & immutable_heads()")
-    if protected:
+    # Check the term this setup adds, not `immutable_heads()` as a whole. A
+    # workspace legitimately sitting on trunk or a tag is already a built-in
+    # immutable head, and reporting that as a broken alias is a false alarm.
+    contributed = jj.commits("only_if(not_default(), other_workspaces())")
+    if contributed:
         raise RuntimeError(
-            "the alias does not collapse in default: default sees a working copy as an immutable head"
+            "the alias does not collapse in default: default sees another workspace as an "
+            "immutable head"
         )
     print("setup: verified that default keeps coordinator rewrite authority.")
 

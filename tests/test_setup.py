@@ -78,3 +78,22 @@ def test_overlap_audit_catches_shared_feature_only_ancestor(jj_repo):
 def test_setup_check_refuses_missing_aliases(jj_repo, capsys):
     assert run_setup(jj_repo.root, check_only=True) == 2
     assert "missing or differs" in capsys.readouterr().err
+
+
+def test_setup_accepts_a_workspace_parked_on_an_immutable_head(jj_repo):
+    """Trunk can move onto a live workspace's `@`, making that working copy a
+    built-in immutable head. Checking `immutable_heads()` wholesale reported
+    that correct topology as a broken alias; only this setup's own term counts."""
+    jj_repo.run(jj_repo.root, "bookmark", "create", "trunk", "-r", "@-")
+    jj_repo.run(jj_repo.root, "config", "set", "--repo", "revset-aliases.'trunk()'", "trunk")
+    assert run_setup(jj_repo.root) == 0
+
+    parked = jj_repo.add_workspace("parked")
+    jj_repo.run(jj_repo.root, "bookmark", "set", "trunk", "-r", "parked@")
+
+    # The precondition the old check tripped over.
+    assert Jj(jj_repo.root).commits("working_copies() & immutable_heads()")
+
+    assert run_setup(jj_repo.root) == 0
+    assert run_setup(jj_repo.root, check_only=True) == 0
+    assert parked.exists()

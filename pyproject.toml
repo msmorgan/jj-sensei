@@ -7,6 +7,8 @@ name = "jj-sensei"
 version = "0.1.0"
 description = "Installed Jujutsu help extraction and agent-oriented repair tooling"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [
   { name = "Michael Morgan", email = "self@msmorgan.dev" },
@@ -34,6 +36,9 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"
+markers = [
+  "contract: pins the shape of the installed jj's help; skips on any other jj version",
+]
 pythonpath = ["src"]
 testpaths = ["tests"]
 

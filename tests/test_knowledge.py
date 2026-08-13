@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from jj_sensei import cli
 from jj_sensei.knowledge import (
     build_manifest,
@@ -212,13 +214,32 @@ def test_manifest_lock_detects_structural_drift():
     ]
 
 
+@pytest.mark.contract
 def test_installed_jj_help_contract_has_not_drifted():
-    from jj_sensei.knowledge import HelpSource
+    """Pin the shape of the installed jj's help so an upgrade surfaces changes.
+
+    The fingerprint is version-specific by construction, so this can only assert
+    against the jj it was recorded for. Skip loudly on any other version rather
+    than turning every contributor's suite red — `pytest -ra` prints the reason,
+    and `pytest -m contract` selects this check on its own.
+    """
+    from jj_sensei.knowledge import HelpError, HelpSource
 
     expected = json.loads(
-        (Path(__file__).parent / "fixtures" / "knowledge-contract.json").read_text()
+        (Path(__file__).parent / "fixtures" / "knowledge-contract.json").read_text(encoding="utf-8")
     )
-    actual = manifest_lock(build_manifest(HelpSource()))
+    source = HelpSource()
+    try:
+        installed = source.version()
+    except HelpError as error:
+        pytest.skip(f"no usable jj on PATH: {error}")
+    if installed != expected["jj_version"]:
+        pytest.skip(
+            f"contract was recorded for {expected['jj_version']!r} but {installed!r} is installed; "
+            "review the differences, then re-record with `jj-sensei rtfm --manifest-lock`"
+        )
+
+    actual = manifest_lock(build_manifest(source))
     assert actual == expected, (
         "The installed jj help contract changed. Review command/option/language changes, "
         "then regenerate the structural fingerprint deliberately."

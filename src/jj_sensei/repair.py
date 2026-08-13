@@ -142,7 +142,10 @@ def _unlock(stream) -> None:
 
 def converge(jj: Jj, *, announce: bool = True) -> bool:
     """Converge equivalent divergent successors, returning whether work was done."""
-    current = jj.one_commit("@")
+    # Snapshot first: the keeper is chosen from each candidate's `empty`, and an
+    # unsnapshotted edit reads as empty. `repair` happens to snapshot earlier via
+    # `workspace update-stale`, but `converge` is also a documented entry point.
+    current = jj.one_commit("@", snapshot=True)
     safe_revision(current.change_id)
     candidates = jj.commits(f"change_id({current.change_id})")
     if len(candidates) <= 1:
