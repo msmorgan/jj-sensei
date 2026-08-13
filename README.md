@@ -84,6 +84,11 @@ continues after a failed jj command.
 a focused technique. Its entry point is a compact scenario index rather than a
 general tutorial or a long sequence of commands.
 
+It also records small, high-leverage idioms that are easy to miss in the full
+manual: choosing whether a selected fileset becomes the earlier or later half
+of a split, expressing after/before placement as an idempotent invariant, and
+using `-A` with `-B` to name one exact graph edge.
+
 The first technique is interpolation: turning one mixed change into two when
 the desired intermediate content cannot be selected from the existing diff—for
 example, because generated artifacts must be recreated at the earlier logical
