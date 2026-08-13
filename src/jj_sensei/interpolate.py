@@ -1,4 +1,4 @@
-"""Insert a constructed intermediate commit into a specific revision edge.
+"""Construct a state between commits when files-and-lines selection cannot.
 
 `jj split` divides a commit's existing diff: every byte of both halves already
 appears in the original. That is the wrong tool when the intermediate state has
@@ -7,12 +7,15 @@ cannot express "the catalog before this entry, with its manifests regenerated"
 as a subset of any diff, because the regenerated manifests appear neither in the
 original commit nor in its parent.
 
-Interpolation constructs that state instead. `begin -A AFTER -B BEFORE` inserts
-an empty commit into that exact edge and pulls BEFORE's full content down into
-it, leaving BEFORE empty. The caller then edits the working copy freely --
-deleting, adding, rerunning generators -- until it holds the intermediate state.
-`finish` restores BEFORE's original content on top, so its diff becomes exactly
-the delta between the constructed state and where history already was.
+This is not a native jj idiom. Git can hold a saved commit, index, and working
+tree at different states; jj's working copy is itself a commit. Interpolation
+contains that impedance inside a guarded transaction. `begin -A AFTER -B
+BEFORE` inserts an empty commit into that exact edge and pulls BEFORE's full
+content down into it, leaving BEFORE empty. The caller then edits the working
+copy freely -- deleting, adding, rerunning generators -- until it holds the
+intermediate state. `finish` restores BEFORE's original content on top, so its
+diff becomes exactly the delta between the constructed state and where history
+already was.
 
 The original content is recovered from the target's pre-rebase commit id, which
 `begin` records. Rewriting a commit leaves the old one in the store, hidden but
@@ -682,9 +685,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="jj-sensei interpolate",
         description=(
-            "Insert a constructed intermediate commit into a named revision edge. Unlike "
-            "`jj split`, the intermediate state may contain content that appears in neither "
-            "the upper commit nor the lower endpoint."
+            "Guarded escape hatch for constructing an intermediate state between two commits "
+            "when doing so is not a matter of selecting files and lines."
         ),
         epilog=(
             "Exit 0 when clean; 1 when the working copy awaits your edits; "
@@ -694,7 +696,11 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="phase", required=True)
     begin = commands.add_parser(
         "begin",
-        help="insert a commit into an edge and pull the upper endpoint's content into it",
+        help="begin the guarded interpolation inside a named edge",
+        description=(
+            "Insert a commit into the -A/-B edge and pull the upper endpoint's complete tree "
+            "into it for construction of the intermediate state."
+        ),
     )
     begin.add_argument("-A", "--after", required=True, help="lower endpoint of the edge")
     begin.add_argument("-B", "--before", required=True, help="upper endpoint of the edge")

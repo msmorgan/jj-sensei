@@ -101,12 +101,15 @@ revsets—including `ROOT::` for a subtree—and previews nontrivial selections
 before mutation. For ordinary insertion and reordering it prefers `-A`/`-B`;
 `-o` is reserved for intentional forks and merges.
 
-The first technique is interpolation: turning one mixed change into two when
-the desired intermediate content cannot be selected from the existing diff—for
-example, because generated artifacts must be recreated at the earlier logical
-state. Its guarded helper inserts a described change into an explicitly named
+Its guarded escape hatch is interpolation: turning one mixed change into two
+by constructing an intermediate state between two commits when doing so is not
+a matter of selecting files and lines—for example, because generated artifacts
+must be recreated at that state. jj has no index separate from its working-copy
+commit, so the helper temporarily rehomes the upper revision's tree while
+constructing the lower one. It inserts the change into an explicitly named
 `-A`/`-B` edge, journals every transition, supports merge edges, and can finish
-or abort after an interrupted process without operation-log recovery.
+or abort after an interrupted process without operation-log recovery. It is
+intentionally narrow, not a general replacement for `jj split`.
 
 ### boundaries
 

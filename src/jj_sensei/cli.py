@@ -79,7 +79,7 @@ def parser() -> argparse.ArgumentParser:
     rtfd_parser.add_argument("args", nargs=argparse.REMAINDER)
     interpolate_parser = commands.add_parser(
         "interpolate",
-        help="construct an intermediate state inside a revision edge",
+        help="construct a state that files-and-lines selection cannot express",
     )
     interpolate_parser.add_argument("args", nargs=argparse.REMAINDER)
     return result

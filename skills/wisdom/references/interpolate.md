@@ -1,9 +1,17 @@
 # Interpolate a change
 
-Use interpolation when one existing change should become two, but the desired
-lower state cannot be selected from the existing diff. Typical cases include
-generated manifests, lockfiles, snapshots, migrations, and other artifacts that
-must be regenerated from an earlier logical state.
+Interpolation constructs an intermediate state between two commits when doing
+so is not a matter of selecting files and lines. Prefer ordinary `jj split`
+whenever selection is sufficient. Use this guarded escape hatch when, for
+example, generated manifests, lockfiles, snapshots, migrations, or other
+artifacts must be recreated at the intermediate state.
+
+This is not a native jj idiom. Git can hold a saved commit, index, and working
+tree at different states during this kind of split. In jj the working copy is a
+real commit, so the helper temporarily moves the upper revision's complete tree
+into a newly inserted lower revision, journals that graph state, and later
+restores the exact original upper tree. The guarded transaction contains that
+impedance; do not reproduce its internal graph choreography by hand.
 
 Interpolation names the exact graph edge using jj's `--after` and `--before`
 style. The endpoints must be distinct, and `AFTER` must be a parent of `BEFORE`.
