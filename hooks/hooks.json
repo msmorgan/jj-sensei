@@ -10,6 +10,29 @@
             "statusMessage": "Checking for a Jujutsu workspace"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/jj_status.py\"",
+            "timeout": 10,
+            "statusMessage": "Reading Jujutsu workspace status"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|run_command|write_to_file|replace_file_content|multi_replace_file_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/jj_status.py\"",
+            "timeout": 10,
+            "statusMessage": "Refreshing Jujutsu workspace status"
+          }
+        ]
       }
     ]
   }

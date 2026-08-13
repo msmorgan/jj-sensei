@@ -8,6 +8,7 @@ import sys
 from . import conflicts, interpolate, knowledge, use_utf8_output
 from .repair import run_converge, run_repair, run_resolve
 from .setup import run_setup
+from .status import run_status
 
 
 def parser() -> argparse.ArgumentParser:
@@ -45,6 +46,15 @@ def parser() -> argparse.ArgumentParser:
     setup.add_argument(
         "--check", action="store_true", help="audit config context and topology only"
     )
+    status = commands.add_parser(
+        "status",
+        help="snapshot and print compact agent-oriented workspace status",
+    )
+    status.add_argument(
+        "--porcelain",
+        action="store_true",
+        help="print KEY<TAB>LINE for hook suppression",
+    )
     conflict_parser = commands.add_parser(
         "conflicts",
         help="inspect or resolve materialized conflicts",
@@ -79,6 +89,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_converge()
     if args.command == "setup":
         return run_setup(check_only=args.check)
+    if args.command == "status":
+        return run_status(porcelain=args.porcelain)
     if args.command == "conflicts":
         return conflicts.main(args.args)
     if args.command == "rtfm":

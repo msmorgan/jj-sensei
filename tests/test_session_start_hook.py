@@ -67,8 +67,9 @@ def hook_manifest_command() -> str:
     commands = [
         hook["command"] for entry in manifest["hooks"]["SessionStart"] for hook in entry["hooks"]
     ]
-    assert len(commands) == 1, commands
-    return commands[0]
+    matches = [command for command in commands if command.endswith('/hooks/session_start.sh"')]
+    assert len(matches) == 1, commands
+    return matches[0]
 
 
 @pytest.mark.parametrize("plugin_root", PLUGIN_ROOT_VARIABLES)

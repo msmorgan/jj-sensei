@@ -1,7 +1,7 @@
 {
   "name": "jj-sensei",
   "version": "0.1.0",
-  "description": "Jujutsu startup fluency, installed help, guarded history shaping, workspace isolation, and resumable repair",
+  "description": "Jujutsu startup fluency, live status, installed help, guarded history shaping, workspace isolation, and resumable repair",
   "author": {
     "name": "Michael Morgan",
     "email": "self@msmorgan.dev",
@@ -18,7 +18,7 @@
   "interface": {
     "displayName": "jj-sensei",
     "shortDescription": "Teach your agents Jujutsu.",
-    "longDescription": "Use Jujutsu safely with eager operational guidance, version-matched help, guarded history-shaping techniques, multi-workspace isolation, and resumable conflict and divergence repair.",
+    "longDescription": "Use Jujutsu safely with eager guidance, live workspace status, version-matched help, guarded history-shaping techniques, multi-workspace isolation, and resumable conflict and divergence repair.",
     "developerName": "Michael Morgan",
     "category": "Developer Tools",
     "capabilities": [],

@@ -29,6 +29,18 @@ The repository detector only examines parent directories; it deliberately does
 not invoke jj, since even a read-looking jj command can synchronize a colocated
 Git repository. Outside a jj repository, the hook emits nothing.
 
+A second hook provides a compact live status line at session start and after
+each file-writing or shell tool. It identifies the workspace and working-copy
+change, summarizes descriptions and edit volume, and makes conflicts, stale
+workspaces, and bookmarks on `@` difficult to miss. Post-tool probes eagerly
+snapshot agent-authored filesystem edits, but repeated context is suppressed
+until the rendered state changes.
+
+Status and history-repair operations share one short workspace lock. The hook
+never repairs, unstales, or changes graph topology, and it always allows the
+turn to continue. Antigravity receives changed status on the invocation after a
+tool call; Claude Code and Codex receive it directly.
+
 ## Skills
 
 Four skills ship today. They are meant to feel like parts of one lesson:
@@ -120,7 +132,7 @@ Start a new session after installing or updating the plugin.
 
 ```text
 plugin.json, hooks.json   Antigravity plugin and hook manifests
-hooks/                    Claude hook manifest and shared startup guidance
+hooks/                    startup guidance and cross-host live status hooks
 skills/knowledge/         version-matched access to installed jj help
 skills/wisdom/            guarded techniques for uncommon history shaping
 skills/harmony/           stale-state, divergence, and conflict repair

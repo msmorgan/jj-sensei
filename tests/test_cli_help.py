@@ -15,6 +15,7 @@ PACKAGED_COMMANDS = [
     ["resolve"],
     ["converge"],
     ["setup"],
+    ["status"],
     ["rtfm"],
     ["conflicts"],
     ["conflicts", "list"],

@@ -93,7 +93,9 @@ class Jj:
         return result
 
     def workspace_root(self) -> Path:
-        return Path(self.run("workspace", "root").stdout.strip()).resolve()
+        return Path(
+            self.run("workspace", "root", ignore_working_copy=True).stdout.strip()
+        ).resolve()
 
     def workspaces(self) -> list[Workspace]:
         result = self.run(
