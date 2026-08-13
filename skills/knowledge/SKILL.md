@@ -8,12 +8,12 @@ description: Read authoritative documentation embedded in the installed Jujutsu 
 Resolve the helper from this loaded skill, not from the target repository:
 
 ```bash
-"<skill-dir>/scripts/knowledge" --list
-"<skill-dir>/scripts/knowledge" revsets
-"<skill-dir>/scripts/knowledge" revsets --search ancestors
-"<skill-dir>/scripts/knowledge" revsets --full
-"<skill-dir>/scripts/knowledge" rebase
-"<skill-dir>/scripts/knowledge" git push --full
+"<skill-dir>/scripts/rtfm" --list
+"<skill-dir>/scripts/rtfm" revsets
+"<skill-dir>/scripts/rtfm" revsets --search ancestors
+"<skill-dir>/scripts/rtfm" revsets --full
+"<skill-dir>/scripts/rtfm" rebase
+"<skill-dir>/scripts/rtfm" git push --full
 ```
 
 Use a help keyword for a language or conceptual topic. The installed jj lists

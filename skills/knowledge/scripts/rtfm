@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Query documentation embedded in the installed jj binary."""
+"""Read documentation embedded in the installed jj binary."""
 
 import sys
 from pathlib import Path

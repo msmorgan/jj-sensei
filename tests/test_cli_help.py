@@ -14,7 +14,7 @@ PACKAGED_COMMANDS = [
     ["resolve"],
     ["converge"],
     ["setup"],
-    ["knowledge"],
+    ["rtfm"],
     ["conflicts"],
     ["conflicts", "list"],
     ["conflicts", "show"],
@@ -32,7 +32,7 @@ SKILL_COMMANDS = [
     [str(HARMONY / "conflicts"), "accept"],
     [str(HARMONY / "conflicts"), "auto"],
     [str(ROOT / "skills" / "boundaries" / "scripts" / "setup-immutability")],
-    [str(ROOT / "skills" / "knowledge" / "scripts" / "knowledge")],
+    [str(ROOT / "skills" / "knowledge" / "scripts" / "rtfm")],
 ]
 
 

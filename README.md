@@ -2,41 +2,84 @@
 
 *Teach your agents Jujutsu.*
 
-A Claude Code and Codex plugin for working in [Jujutsu (jj)](https://jj-vcs.github.io/jj/) repositories. Three layers:
+jj-sensei is a Claude Code and Codex plugin that teaches coding agents to use
+[Jujutsu (jj)](https://jj-vcs.github.io/jj/) fluently and safely. It gives them
+the working knowledge they need for everyday jj operations, direct access to
+the manual installed on your machine, and guarded tools for the situations
+where repositories become difficult.
 
-1. **Eager** — a `SessionStart` hook injects the operational jj model, common Git-to-jj command mappings, and repository safety constraints, only when the session starts beneath a `.jj/` directory. The detector does not run jj, so it cannot trigger colocated Git synchronization. Zero prompt cost elsewhere.
-2. **Authoritative** — the `knowledge` skill extracts focused sections from documentation embedded in the installed jj binary. `--full` exposes complete command or language help without vendoring it.
-3. **Operational** — Python subskills provide resumable stale/divergence/conflict repair and install the multi-workspace immutability guard. They have no runtime dependencies beyond Python and jj.
+It does not replace jj or hide it behind a new version-control abstraction.
+Agents still use the real `jj` CLI and learn its native model.
 
-The toolkit is standalone: it combines local agent policy with documentation from the jj executable actually present on the machine.
+## What it does automatically
 
-## Knowledge
+When a session starts anywhere beneath a `.jj/` directory, jj-sensei injects a
+practical startup guide. It covers the things an agent needs before its first
+command:
 
-The skill wrapper normalizes jj's native help interface and keeps routine
-queries compact:
+- jj's working-copy model and the absence of a staging area
+- direct Git-to-jj equivalents for common operations
+- change IDs, bookmarks, rebasing, workspaces, and colocated Git repositories
+- Git-shaped diff output and non-interactive command hygiene
+- workspace immutability and the escape hatches an agent must never use
+- when to stop guessing and consult the installed jj manual
 
-```bash
-skills/knowledge/scripts/knowledge --list
-skills/knowledge/scripts/knowledge revsets
-skills/knowledge/scripts/knowledge revsets --search ancestors
-skills/knowledge/scripts/knowledge revsets --full
-skills/knowledge/scripts/knowledge git push --full
-```
+The repository detector only examines parent directories; it deliberately does
+not invoke jj, since even a read-looking jj command can synchronize a colocated
+Git repository. Outside a jj repository, the hook emits nothing.
 
-Command topics default to short help. Language topics default to essential
-grammar plus a section outline; `--search` extracts a matching official
-definition or section, and `--full` returns the complete installed topic.
+## Skills
 
-Tests pin a prose-free structural fingerprint for the supported jj version:
-command paths, usage shapes, arguments, options, subcommands, keyword heading
-trees, and revset/fileset/template definitions. A jj upgrade therefore fails
-the drift test until its interface changes have been reviewed deliberately.
-After review, `skills/knowledge/scripts/knowledge --manifest-lock` emits the updated
-prose-free lock.
+Three skills ship today. They are meant to feel like parts of one lesson:
+routine work begins with the injected guidance, uncertainty goes to
+`knowledge`, repository trouble goes to `harmony`, and multi-workspace safety
+comes from `boundaries`.
+
+### knowledge
+
+`knowledge` reads the authoritative documentation embedded in the installed jj
+binary. An agent can ask for a command, a language topic such as revsets or
+filesets, one relevant definition, or the full manual section. The included
+`rtfm` helper keeps ordinary answers compact without vendoring a second,
+possibly stale copy of jj's documentation.
+
+Because the answers come from the local executable, they match the jj version
+the agent is actually operating. Tests fingerprint the structure of that help
+interface so jj upgrades surface new commands, options, and language features
+for deliberate review.
+
+### harmony
+
+`harmony` handles the messy states that otherwise turn into long, fragile
+runbooks: stale workspaces, divergent working-copy successors, and file
+conflicts. Its one-stop repair command updates stale state, converges only
+equivalent divergence, and walks mutable conflicts from oldest to newest.
+
+Repair is locked and crash-resumable. It journals completed transitions,
+automates only resolutions it can establish are safe, and pauses with a useful
+diagnosis when human judgment is required. Narrower tools are included for
+inspecting conflict markers, accepting a specifically chosen representation,
+and running conservative mechanical resolutions.
+
+It never performs operation-log surgery, bypasses immutability, or silently
+continues after a failed jj command.
+
+### boundaries
+
+`boundaries` installs and audits a repository-level `immutable_heads()` policy
+for repositories with multiple live jj workspaces. From a feature workspace,
+other live working-copy lines become immutable; from the primary `default`
+workspace, the coordinator retains the flexibility to rewrite those feature
+stacks.
+
+The setup helper verifies the configuration after installing it and can also
+run in read-only check mode. It detects shared mutable ancestry between live
+feature workspaces and treats that topology as a safe stop instead of teaching
+agents to bypass the guard.
 
 ## Install
 
-Register the federated `msmorgan` marketplace once:
+Register the federated `msmorgan` marketplace once, then install jj-sensei.
 
 ### Claude Code
 
@@ -54,19 +97,14 @@ codex plugin add jj-sensei@msmorgan
 
 Start a new session after installing or updating the plugin.
 
-## Layout
+## Repository layout
 
-```
-.claude-plugin/plugin.json     Claude Code plugin manifest
-.codex-plugin/plugin.json      Codex plugin manifest
-hooks/hooks.json               SessionStart registration
-hooks/session_start.sh         jj-repo detection
-hooks/jj-context.md            the injected blurb
-skills/knowledge/              installed-help extractor
-skills/harmony/                inspect, converge, resolve, and repair
-skills/boundaries/             install and audit workspace isolation
-src/jj_sensei/                 Python implementation
-pyproject.toml                 package, CLI, test, and lint metadata
+```text
+hooks/                    jj-repo detection and startup guidance
+skills/knowledge/         version-matched access to installed jj help
+skills/harmony/           stale-state, divergence, and conflict repair
+skills/boundaries/        multi-workspace immutability setup and audit
+src/jj_sensei/            shared Python implementation
 ```
 
 For local package development:

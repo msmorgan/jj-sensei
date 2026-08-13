@@ -75,7 +75,7 @@ class HelpSource:
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
-        prog="knowledge",
+        prog="rtfm",
         description="Extract documentation from the installed jj binary.",
     )
     result.add_argument("topic", nargs="*", help="help keyword or canonical command path")
@@ -137,7 +137,7 @@ def run_help(argv: list[str] | None, source: HelpSource) -> int:
             return 0
         if not args.topic:
             parser().print_usage(sys.stderr)
-            print("knowledge: supply a topic or use --list", file=sys.stderr)
+            print("rtfm: supply a topic or use --list", file=sys.stderr)
             return 2
 
         keywords = available_keywords(source)
@@ -147,7 +147,7 @@ def run_help(argv: list[str] | None, source: HelpSource) -> int:
                 selected = extract_relevant(output, args.search)
                 if selected is None:
                     print(
-                        f"knowledge: no {args.search!r} section or definition in {args.topic[0]!r}",
+                        f"rtfm: no {args.search!r} section or definition in {args.topic[0]!r}",
                         file=sys.stderr,
                     )
                     return 2
@@ -159,7 +159,7 @@ def run_help(argv: list[str] | None, source: HelpSource) -> int:
             compact = compact_keyword(args.topic[0], output)
             if compact is None:
                 print(
-                    "knowledge: installed jj help has an unfamiliar structure; showing full topic",
+                    "rtfm: installed jj help has an unfamiliar structure; showing full topic",
                     file=sys.stderr,
                 )
                 print(output, end="")
@@ -171,7 +171,7 @@ def run_help(argv: list[str] | None, source: HelpSource) -> int:
         requested = " ".join(args.topic)
         requested_path = "" if requested == "jj" else requested
         if requested_path not in command_paths:
-            print(f"knowledge: no help keyword or canonical command path {requested!r}", file=sys.stderr)
+            print(f"rtfm: no help keyword or canonical command path {requested!r}", file=sys.stderr)
             return 2
         command_args = [] if requested_path == "" else args.topic
         output = source.command(command_args, full=args.full or bool(args.search))
@@ -179,7 +179,7 @@ def run_help(argv: list[str] | None, source: HelpSource) -> int:
             selected = extract_relevant(output, args.search)
             if selected is None:
                 print(
-                    f"knowledge: no {args.search!r} section or definition in {requested!r}",
+                    f"rtfm: no {args.search!r} section or definition in {requested!r}",
                     file=sys.stderr,
                 )
                 return 2
@@ -187,7 +187,7 @@ def run_help(argv: list[str] | None, source: HelpSource) -> int:
         print(output, end="")
         return 0
     except (HelpError, OSError, json.JSONDecodeError) as error:
-        print(f"knowledge: {error}", file=sys.stderr)
+        print(f"rtfm: {error}", file=sys.stderr)
         return 2
 
 

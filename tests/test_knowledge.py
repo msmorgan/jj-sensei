@@ -169,7 +169,7 @@ def test_manifest_modes_are_mutually_exclusive(capsys):
     assert "must be used by itself" in capsys.readouterr().err
 
 
-def test_package_cli_forwards_knowledge_options(monkeypatch):
+def test_package_cli_forwards_rtfm_options(monkeypatch):
     received = None
 
     def fake_main(args):
@@ -178,7 +178,7 @@ def test_package_cli_forwards_knowledge_options(monkeypatch):
         return 17
 
     monkeypatch.setattr(cli.knowledge, "main", fake_main)
-    assert cli.main(["knowledge", "--list"]) == 17
+    assert cli.main(["rtfm", "--list"]) == 17
     assert received == ["--list"]
 
 

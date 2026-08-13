@@ -40,9 +40,7 @@ def parser() -> argparse.ArgumentParser:
     setup = commands.add_parser(
         "setup",
         help="install the workspace immutability aliases",
-        description=(
-            "Install and audit jj-sensei's repository-level workspace-isolation aliases."
-        ),
+        description=("Install and audit jj-sensei's repository-level workspace-isolation aliases."),
     )
     setup.add_argument(
         "--check", action="store_true", help="audit config context and topology only"
@@ -53,14 +51,14 @@ def parser() -> argparse.ArgumentParser:
         description="Inspect or conservatively resolve jj diff+snapshot conflict markers.",
     )
     conflict_parser.add_argument("args", nargs=argparse.REMAINDER)
-    knowledge_parser = commands.add_parser("knowledge", help="read the installed jj documentation")
-    knowledge_parser.add_argument("args", nargs=argparse.REMAINDER)
+    rtfm_parser = commands.add_parser("rtfm", help="read the installed jj documentation")
+    rtfm_parser.add_argument("args", nargs=argparse.REMAINDER)
     return result
 
 
 def main(argv: list[str] | None = None) -> int:
     raw_argv = list(sys.argv[1:] if argv is None else argv)
-    if raw_argv[:1] == ["knowledge"]:
+    if raw_argv[:1] == ["rtfm"]:
         return knowledge.main(raw_argv[1:])
     if raw_argv[:1] == ["conflicts"]:
         return conflicts.main(raw_argv[1:])
@@ -75,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         return run_setup(check_only=args.check)
     if args.command == "conflicts":
         return conflicts.main(args.args)
-    if args.command == "knowledge":
+    if args.command == "rtfm":
         return knowledge.main(args.args)
     raise AssertionError(args.command)
 
