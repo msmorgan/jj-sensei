@@ -101,6 +101,12 @@ revsets—including `ROOT::` for a subtree—and previews nontrivial selections
 before mutation. For ordinary insertion and reordering it prefers `-A`/`-B`;
 `-o` is reserved for intentional forks and merges.
 
+For inspection, `wisdom` supplies small, tested template idioms for identities,
+state flags, parents, changed paths, stats, and machine-readable lists. It
+prefers built-in and bounded views before custom templates or full patches;
+anything beyond the catalog routes to `knowledge`'s installed, version-matched
+template reference instead of being guessed.
+
 Because the live-status hook snapshots after agent tools, `wisdom` can also use
 `jj evolog` to recover the ordered patches inside an oversized `@` and rebuild
 them as a coherent series of commits. The snapshots preserve execution history;

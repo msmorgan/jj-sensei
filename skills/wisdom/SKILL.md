@@ -1,6 +1,6 @@
 ---
 name: wisdom
-description: Recognize useful Jujutsu history-shaping idioms and uncommon scenarios, then route to focused guidance or guarded techniques. Use when splitting mixed work, reconstructing an oversized working-copy change from its evolution log, selecting precise revisions with revsets, placing or reordering changes with split/rebase, naming an exact graph edge, or constructing an intermediate state between commits when doing so is not a matter of selecting files and lines.
+description: Recognize useful Jujutsu idioms and uncommon history-shaping scenarios, then route to focused guidance or guarded techniques. Use when constructing precise compact views with jj templates; splitting mixed work; reconstructing an oversized working-copy change from its evolution log; selecting precise revisions with revsets; placing or reordering changes with split/rebase; naming an exact graph edge; or constructing an intermediate state between commits when doing so is not a matter of selecting files and lines.
 ---
 
 # Apply Jujutsu Wisdom
@@ -24,6 +24,10 @@ paths from this loaded `SKILL.md`, not from the repository being edited.
   [Place changes deliberately](references/placement.md).
 - **“I need to move a precise set of revisions or a whole subtree.”** Read
   [Place changes deliberately](references/placement.md).
+- **“I need a concise view of changes, paths, parents, or state that ordinary
+  `log`/`diff` output does not quite provide.”** Read
+  [Use templates without guessing](references/templates.md) for small,
+  composable, tested template idioms.
 
 If no listed scenario matches, do not improvise a multi-step rewrite from this
 skill. Use `knowledge` to read the version-matched jj manual, then choose normal
