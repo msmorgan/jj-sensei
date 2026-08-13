@@ -5,9 +5,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +25,7 @@ _LEADING_DEFINITION = re.compile(r"^\* `(?P<term>[^`]+)`")
 _OPTION_CODE = re.compile(r"`(?P<option>--?[a-zA-Z0-9][^`]*)`")
 _ARGUMENT_CODE = re.compile(r"`(?P<argument><[^`]+>)`")
 _KEYWORD = re.compile(r"^\s*-\s+(?P<name>[a-z][a-z-]+):(?:\s|$)")
+_VERSION = re.compile(r"\b(?P<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b")
 _LANGUAGE_ESSENTIALS = {
     "revsets": {"Hidden revisions", "Symbols", "Priority", "Operators"},
     "filesets": {"Quoting file names", "File patterns", "Operators", "Functions"},
@@ -38,11 +44,14 @@ class CommandSection:
 
 
 class HelpSource:
-    """Read documentation from one installed jj executable."""
+    """Read help and version-matched manual pages for one jj executable."""
 
-    def __init__(self, executable: str = "jj"):
+    def __init__(self, executable: str = "jj", docs_dir: Path | None = None):
         self.executable = executable
         self._markdown: str | None = None
+        self._configured_docs_dir = docs_dir
+        self._docs: dict[str, str] | None = None
+        self._local_docs_dir: Path | None = None
 
     def run(self, *args: str) -> str:
         command = [self.executable, "--no-pager", "--color", "never", *args]
@@ -74,17 +83,128 @@ class HelpSource:
             self._markdown = self.run("util", "markdown-help")
         return self._markdown
 
+    def doc_topics(self) -> list[str]:
+        self._load_docs_index()
+        assert self._docs is not None
+        return sorted(self._docs)
+
+    def doc(self, topic: str) -> str:
+        self._load_docs_index()
+        assert self._docs is not None
+        try:
+            relative = self._docs[topic]
+        except KeyError as error:
+            raise HelpError(f"no installed manual page {topic!r}") from error
+        if self._local_docs_dir is not None:
+            return (self._local_docs_dir / relative).read_text(encoding="utf-8")
+        return self._remote_text(relative)
+
+    def _load_docs_index(self) -> None:
+        if self._docs is not None:
+            return
+        docs_dir = self._find_docs_dir()
+        if docs_dir is not None:
+            self._local_docs_dir = docs_dir
+            paths = [path.relative_to(docs_dir).as_posix() for path in docs_dir.rglob("*.md")]
+        else:
+            paths = self._remote_doc_paths()
+        docs: dict[str, str] = {}
+        for path in paths:
+            topic = _doc_topic(path)
+            if previous := docs.get(topic):
+                raise HelpError(
+                    f"manual pages {previous!r} and {path!r} both normalize to {topic!r}"
+                )
+            docs[topic] = path
+        self._docs = docs
+
+    def _find_docs_dir(self) -> Path | None:
+        configured = self._configured_docs_dir or _docs_override()
+        if configured is not None:
+            resolved = configured.expanduser().resolve()
+            if not resolved.is_dir():
+                raise HelpError(f"configured jj docs directory does not exist: {resolved}")
+            return resolved
+
+        executable = shutil.which(self.executable)
+        if executable is None:
+            return None
+        prefix = Path(executable).resolve().parent.parent
+        version = self._version_number()
+        candidates = [
+            prefix / "share" / "doc" / package / "docs"
+            for package in ("jujutsu", "jj", "jj-vcs", f"jujutsu-{version}")
+        ]
+        candidates.extend(
+            [prefix / "share" / package / "docs" for package in ("jujutsu", "jj", "jj-vcs")]
+        )
+        return next((path for path in candidates if path.is_dir()), None)
+
+    def _version_number(self) -> str:
+        match = _VERSION.search(self.version())
+        if match is None:
+            raise HelpError("could not determine a release version for the installed jj")
+        return match.group("version")
+
+    def _remote_doc_paths(self) -> list[str]:
+        tag = f"v{self._version_number()}"
+        url = f"https://api.github.com/repos/jj-vcs/jj/git/trees/{tag}?recursive=1"
+        try:
+            payload = json.loads(self._request(url))
+        except (json.JSONDecodeError, KeyError, TypeError) as error:
+            raise HelpError(f"could not read the official docs index for {tag}") from error
+        if payload.get("truncated"):
+            raise HelpError(f"official docs index for {tag} was truncated")
+        paths = [
+            item["path"].removeprefix("docs/")
+            for item in payload.get("tree", [])
+            if item.get("type") == "blob"
+            and item.get("path", "").startswith("docs/")
+            and item.get("path", "").endswith(".md")
+        ]
+        if not paths:
+            raise HelpError(f"official tag {tag} has no Markdown documentation")
+        return paths
+
+    def _remote_text(self, relative: str) -> str:
+        tag = f"v{self._version_number()}"
+        path = urllib.parse.quote(relative, safe="/")
+        return self._request(f"https://raw.githubusercontent.com/jj-vcs/jj/{tag}/docs/{path}")
+
+    @staticmethod
+    def _request(url: str) -> str:
+        request = urllib.request.Request(url, headers={"User-Agent": "jj-sensei-rtfm"})
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                return response.read().decode("utf-8")
+        except (OSError, UnicodeError, urllib.error.URLError) as error:
+            raise HelpError(
+                f"packaged jj docs were not found and the version-matched official source "
+                f"could not be read: {error}"
+            ) from error
+
+
+def _docs_override() -> Path | None:
+    value = os.environ.get("JJ_SENSEI_DOCS_DIR")
+    return Path(value) if value else None
+
+
+def _doc_topic(relative: str) -> str:
+    path = Path(relative)
+    without_suffix = path.with_suffix("").as_posix()
+    return "docs/" + without_suffix.replace("_", "-").lower()
+
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
         prog="rtfm",
-        description="Extract documentation from the installed jj binary.",
+        description="Read help and manual pages matching the installed jj version.",
     )
     result.add_argument("topic", nargs="*", help="help keyword or canonical command path")
     result.add_argument(
         "--full",
         action="store_true",
-        help="print the installed jj's complete long help for the topic",
+        help="print the complete command help, keyword help, or manual page",
     )
     result.add_argument(
         "--search",
@@ -94,7 +214,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument(
         "--list",
         action="store_true",
-        help="list available help keywords and canonical command paths",
+        help="list help keywords, manual pages, and canonical command paths",
     )
     result.add_argument(
         "--manifest",
@@ -143,6 +263,40 @@ def run_help(argv: list[str] | None, source: HelpSource) -> int:
             print("rtfm: supply a topic or use --list", file=sys.stderr)
             return 2
 
+        requested = " ".join(args.topic)
+        if requested.startswith("docs/"):
+            if len(args.topic) != 1:
+                print("rtfm: manual page topics cannot contain spaces", file=sys.stderr)
+                return 2
+            topics = set(source.doc_topics())
+            if requested not in topics:
+                print(f"rtfm: no installed manual page {requested!r}", file=sys.stderr)
+                return 2
+            output = source.doc(requested)
+            if args.search:
+                selected = extract_relevant(output, args.search)
+                if selected is None:
+                    print(
+                        f"rtfm: no {args.search!r} section or definition in {requested!r}",
+                        file=sys.stderr,
+                    )
+                    return 2
+                print(selected, end="")
+                return 0
+            if args.full:
+                print(output, end="")
+                return 0
+            compact = compact_keyword(requested, output)
+            if compact is None:
+                print(
+                    "rtfm: installed jj manual page has an unfamiliar structure; showing it in full",
+                    file=sys.stderr,
+                )
+                print(output, end="")
+            else:
+                print(compact, end="")
+            return 0
+
         keywords = available_keywords(source)
         if len(args.topic) == 1 and args.topic[0] in keywords:
             output = source.keyword(args.topic[0])
@@ -171,10 +325,12 @@ def run_help(argv: list[str] | None, source: HelpSource) -> int:
             return 0
 
         command_paths = set(parse_command_sections(source.markdown_help()))
-        requested = " ".join(args.topic)
         requested_path = "" if requested == "jj" else requested
         if requested_path not in command_paths:
-            print(f"rtfm: no help keyword or canonical command path {requested!r}", file=sys.stderr)
+            print(
+                f"rtfm: no help keyword, docs/ page, or canonical command path {requested!r}",
+                file=sys.stderr,
+            )
             return 2
         command_args = [] if requested_path == "" else args.topic
         output = source.command(command_args, full=args.full or bool(args.search))
@@ -241,9 +397,16 @@ def render_topic_list(source: HelpSource) -> str:
     keywords = available_keywords(source)
     commands = parse_command_sections(source.markdown_help())
     rendered_commands = ["jj" if not path else f"jj {path}" for path in commands]
+    try:
+        docs = source.doc_topics()
+        rendered_docs = "\n  ".join(docs)
+    except HelpError as error:
+        rendered_docs = f"[unavailable: {error}]"
     return (
         "Help keywords:\n  "
         + "\n  ".join(keywords)
+        + "\n\nManual pages:\n  "
+        + rendered_docs
         + "\n\nCanonical command paths:\n  "
         + "\n  ".join(rendered_commands)
         + "\n"
@@ -430,11 +593,15 @@ def build_manifest(source: HelpSource) -> dict:
             "headings": _keyword_headings(text),
             "definitions": _keyword_definitions(text) if topic in _LANGUAGE_ESSENTIALS else [],
         }
+    docs = {
+        topic: {"headings": _keyword_headings(source.doc(topic))} for topic in source.doc_topics()
+    }
     return {
-        "schema": 1,
+        "schema": 2,
         "jj_version": source.version(),
         "commands": commands,
         "keywords": keywords,
+        "docs": docs,
     }
 
 
@@ -448,6 +615,9 @@ def manifest_lock(manifest: dict) -> dict:
         },
         "keywords": {
             topic: _fingerprint(contract) for topic, contract in manifest["keywords"].items()
+        },
+        "docs": {
+            topic: _fingerprint(contract) for topic, contract in manifest.get("docs", {}).items()
         },
     }
 
@@ -521,7 +691,7 @@ def check_manifest(source: HelpSource, path: Path) -> int:
     for difference in differences:
         print(f"- {difference}", file=sys.stderr)
     print(
-        "Review the installed jj changes, then regenerate with `help --manifest-lock`.",
+        "Review the installed jj changes, then regenerate with `rtfm --manifest-lock`.",
         file=sys.stderr,
     )
     return 1
@@ -540,6 +710,9 @@ def manifest_differences(expected: dict, actual: dict) -> list[str]:
     )
     _mapping_differences(
         "keyword", expected.get("keywords", {}), actual.get("keywords", {}), differences
+    )
+    _mapping_differences(
+        "manual page", expected.get("docs", {}), actual.get("docs", {}), differences
     )
     return differences
 

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "jj-sensei"
 version = "0.1.0"
-description = "Installed Jujutsu help extraction and agent-oriented repair tooling"
+description = "Version-matched Jujutsu documentation and agent-oriented repair tooling"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

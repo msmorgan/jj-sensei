@@ -38,16 +38,17 @@ comes from `boundaries`.
 
 ### knowledge
 
-`knowledge` reads the authoritative documentation embedded in the installed jj
-binary. An agent can ask for a command, a language topic such as revsets or
-filesets, one relevant definition, or the full manual section. The included
-`rtfm` helper keeps ordinary answers compact without vendoring a second,
-possibly stale copy of jj's documentation.
+`knowledge` reads authoritative documentation matching the installed jj
+version. An agent can ask for a command, a language topic such as revsets or
+filesets, a broader `docs/` manual page, one relevant definition, or the full
+section. The included `rtfm` helper keeps ordinary answers compact without
+vendoring a second, possibly stale copy of jj's documentation.
 
-Because the answers come from the local executable, they match the jj version
-the agent is actually operating. Tests fingerprint the structure of that help
-interface so jj upgrades surface new commands, options, and language features
-for deliberate review.
+Command and language help comes from the local executable. Manual pages come
+from the package when available, with a fallback to the matching official
+`jj-vcs/jj` release tag for packages such as Nixpkgs that omit them. Tests
+fingerprint both surfaces so jj upgrades expose new commands, options, language
+features, and pages for deliberate review.
 
 ### harmony
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read documentation embedded in the installed jj binary."""
+"""Read help and manual pages matching the installed jj version."""
 
 import sys
 from pathlib import Path

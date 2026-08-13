@@ -7,6 +7,7 @@ import pytest
 
 from jj_sensei import cli
 from jj_sensei.knowledge import (
+    HelpSource,
     build_manifest,
     compact_keyword,
     extract_relevant,
@@ -20,6 +21,7 @@ HELP_HELP = """\
 Usage: jj help [OPTIONS] [COMMAND]...
 
           Possible values:
+          - bookmarks: Named pointers
           - filesets: A language for selecting files
           - revsets: A language for selecting revisions
 """
@@ -86,6 +88,30 @@ Select files.
 * `x | y`: Union.
 """
 
+BOOKMARKS = """\
+# Bookmarks keyword
+
+Embedded bookmark help.
+
+## Remotes
+
+Remote bookmark behavior.
+"""
+
+GIT_EXPERTS = """\
+# Jujutsu for Git experts
+
+Why Git experts may prefer Jujutsu.
+
+## The Git index/staging area
+
+Jujutsu uses commits instead of an index.
+
+## The evolution log
+
+Use `jj evolog` to inspect a change's earlier versions.
+"""
+
 
 class FakeSource:
     def __init__(self, *, malformed_keyword: bool = False):
@@ -101,7 +127,7 @@ class FakeSource:
     def keyword(self, topic):
         if self.malformed_keyword:
             return "unstructured official output\n"
-        return {"revsets": REVSETS, "filesets": FILESETS}[topic]
+        return {"revsets": REVSETS, "filesets": FILESETS, "bookmarks": BOOKMARKS}[topic]
 
     def command(self, path, *, full):
         self.command_calls.append((tuple(path), full))
@@ -109,6 +135,15 @@ class FakeSource:
 
     def markdown_help(self):
         return MARKDOWN_HELP
+
+    def doc_topics(self):
+        return ["docs/bookmarks", "docs/git-experts"]
+
+    def doc(self, topic):
+        return {
+            "docs/bookmarks": "# Bookmarks manual\n\n## Tracking\n\nTrack remote bookmarks.\n",
+            "docs/git-experts": GIT_EXPERTS,
+        }[topic]
 
 
 def test_command_sections_capture_canonical_paths():
@@ -155,7 +190,66 @@ def test_list_discovers_topics_without_hard_coding(capsys):
     assert run_help(["--list"], FakeSource()) == 0
     output = capsys.readouterr().out
     assert "filesets" in output
+    assert "docs/git-experts" in output
     assert "jj log" in output
+
+
+def test_manual_pages_use_an_explicit_docs_namespace(capsys):
+    source = FakeSource()
+
+    assert run_help(["docs/git-experts"], source) == 0
+    compact = capsys.readouterr().out
+    assert "Why Git experts may prefer Jujutsu" in compact
+    assert "Available sections" in compact
+    assert "Use `jj evolog`" not in compact
+
+    assert run_help(["docs/git-experts", "--search", "evolution"], source) == 0
+    assert "Use `jj evolog`" in capsys.readouterr().out
+
+
+def test_embedded_keyword_wins_while_docs_collision_stays_addressable(capsys):
+    source = FakeSource()
+
+    assert run_help(["bookmarks", "--full"], source) == 0
+    assert capsys.readouterr().out.startswith("# Bookmarks keyword")
+    assert run_help(["docs/bookmarks", "--full"], source) == 0
+    assert capsys.readouterr().out.startswith("# Bookmarks manual")
+
+
+def test_explicit_docs_directory_is_read_without_platform_assumptions(tmp_path):
+    docs = tmp_path / "odd-package-layout" / "manual"
+    (docs / "guides").mkdir(parents=True)
+    (docs / "git-experts.md").write_text(GIT_EXPERTS, encoding="utf-8")
+    (docs / "guides" / "multiple_remotes.md").write_text("# Multiple remotes\n", encoding="utf-8")
+    source = HelpSource(docs_dir=docs)
+
+    assert source.doc_topics() == ["docs/git-experts", "docs/guides/multiple-remotes"]
+    assert source.doc("docs/git-experts") == GIT_EXPERTS
+
+
+def test_missing_packaged_docs_fall_back_to_the_matching_official_tag(monkeypatch):
+    source = HelpSource(executable="jj-without-docs")
+    monkeypatch.setattr(source, "_find_docs_dir", lambda: None)
+    monkeypatch.setattr(source, "_version_number", lambda: "9.9.9")
+
+    def fake_request(url):
+        if "/git/trees/v9.9.9" in url:
+            return json.dumps(
+                {
+                    "truncated": False,
+                    "tree": [
+                        {"path": "docs/git-experts.md", "type": "blob"},
+                        {"path": "docs/images/LICENSE", "type": "blob"},
+                    ],
+                }
+            )
+        assert url.endswith("/v9.9.9/docs/git-experts.md")
+        return GIT_EXPERTS
+
+    monkeypatch.setattr(source, "_request", fake_request)
+
+    assert source.doc_topics() == ["docs/git-experts"]
+    assert source.doc("docs/git-experts") == GIT_EXPERTS
 
 
 def test_manifest_lock_cli_is_prose_free(capsys):
@@ -193,11 +287,22 @@ def test_manifest_records_commands_options_and_language_definitions():
         "descendants(x, [depth])",
         "x | y",
     ]
+    assert manifest["docs"]["docs/git-experts"]["headings"] == [
+        "# Jujutsu for Git experts",
+        "## The Git index/staging area",
+        "## The evolution log",
+    ]
 
 
 def test_manifest_lock_detects_structural_drift():
-    original = {"schema": 1, "jj_version": "jj 1", "commands": {}, "keywords": {}}
-    changed = {"schema": 1, "jj_version": "jj 1", "commands": {"new": {}}, "keywords": {}}
+    original = {
+        "schema": 2,
+        "jj_version": "jj 1",
+        "commands": {},
+        "keywords": {},
+        "docs": {},
+    }
+    changed = {**original, "commands": {"new": {}}}
     assert manifest_lock(original)["commands"] != manifest_lock(changed)["commands"]
     assert manifest_differences(original, changed) == ["added commands: new"]
     assert manifest_differences(manifest_lock(original), manifest_lock(changed)) == [
