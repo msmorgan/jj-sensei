@@ -23,6 +23,20 @@ _OPTION_CODE = re.compile(r"`(?P<option>--?[a-zA-Z0-9][^`]*)`")
 _ARGUMENT_CODE = re.compile(r"`(?P<argument><[^`]+>)`")
 _KEYWORD = re.compile(r"^\s*-\s+(?P<name>[a-z][a-z-]+):(?:\s|$)")
 _VERSION = re.compile(r"\b(?P<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b")
+_CHANGELOG_VERSION = re.compile(
+    r"^## \[(?P<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\]",
+    re.MULTILINE,
+)
+_WORKSPACE_PACKAGE = re.compile(
+    r"^\[workspace\.package\]\s*$"
+    r"(?P<body>.*?)"
+    r"(?=^\[|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
+_TOML_VERSION = re.compile(
+    r'^version\s*=\s*"(?P<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)"\s*$',
+    re.MULTILINE,
+)
 _LANGUAGE_ESSENTIALS = {
     "revsets": {"Hidden revisions", "Symbols", "Priority", "Operators"},
     "filesets": {"Quoting file names", "File patterns", "Operators", "Functions"},
@@ -47,6 +61,7 @@ class HelpSource:
         self.executable = executable
         self._markdown: str | None = None
         self._configured_docs_dir = docs_dir
+        self._docs_dir_was_configured = docs_dir is not None
         self._docs: dict[str, str] | None = None
         self._local_docs_dir: Path | None = None
 
@@ -95,6 +110,23 @@ class HelpSource:
         assert self._local_docs_dir is not None
         return (self._local_docs_dir / relative).read_text(encoding="utf-8")
 
+    def docs_version_warning(self) -> str | None:
+        """Describe a detected mismatch for an explicitly configured docs tree."""
+        self._load_docs_index()
+        if not self._docs_dir_was_configured:
+            return None
+        assert self._local_docs_dir is not None
+        docs_version = _docs_version(self._local_docs_dir)
+        if docs_version is None:
+            return None
+        installed_version = self._version_number()
+        if docs_version == installed_version:
+            return None
+        return (
+            f"configured jj docs are for {docs_version}, but installed jj is "
+            f"{installed_version}; set JJ_SENSEI_DOCS_DIR to matching docs"
+        )
+
     def _load_docs_index(self) -> None:
         if self._docs is not None:
             return
@@ -119,6 +151,7 @@ class HelpSource:
     def _find_docs_dir(self) -> Path | None:
         configured = self._configured_docs_dir or _docs_override()
         if configured is not None:
+            self._docs_dir_was_configured = True
             resolved = configured.expanduser().resolve()
             if not resolved.is_dir():
                 raise HelpError(f"configured jj docs directory does not exist: {resolved}")
@@ -148,6 +181,29 @@ class HelpSource:
 def _docs_override() -> Path | None:
     value = os.environ.get("JJ_SENSEI_DOCS_DIR")
     return Path(value) if value else None
+
+
+def _docs_version(docs_dir: Path) -> str | None:
+    marker = docs_dir / ".jj-version"
+    if marker.is_file():
+        match = _VERSION.fullmatch(marker.read_text(encoding="utf-8").strip())
+        if match is not None:
+            return match.group("version")
+
+    cargo = docs_dir.parent / "Cargo.toml"
+    if cargo.is_file():
+        workspace = _WORKSPACE_PACKAGE.search(cargo.read_text(encoding="utf-8"))
+        if workspace is not None:
+            match = _TOML_VERSION.search(workspace.group("body"))
+            if match is not None:
+                return match.group("version")
+
+    changelog = docs_dir.parent / "CHANGELOG.md"
+    if changelog.is_file():
+        match = _CHANGELOG_VERSION.search(changelog.read_text(encoding="utf-8"))
+        if match is not None:
+            return match.group("version")
+    return None
 
 
 def _doc_topic(relative: str) -> str:
@@ -206,18 +262,24 @@ def run_help(argv: list[str] | None, source: HelpSource) -> int:
     try:
         if args.manifest:
             _require_standalone(args, "manifest")
-            print(json.dumps(build_manifest(source), indent=2, sort_keys=True))
+            manifest = build_manifest(source)
+            _warn_about_docs_version(source)
+            print(json.dumps(manifest, indent=2, sort_keys=True))
             return 0
         if args.manifest_lock:
             _require_standalone(args, "manifest_lock")
-            print(json.dumps(manifest_lock(build_manifest(source)), indent=2, sort_keys=True))
+            manifest = manifest_lock(build_manifest(source))
+            _warn_about_docs_version(source)
+            print(json.dumps(manifest, indent=2, sort_keys=True))
             return 0
         if args.check_manifest:
             _require_standalone(args, "check_manifest")
             return check_manifest(source, args.check_manifest)
         if args.list:
             _require_standalone(args, "list")
-            print(render_topic_list(source), end="")
+            topics = render_topic_list(source)
+            _warn_about_docs_version(source)
+            print(topics, end="")
             return 0
         if not args.topic:
             parser().print_usage(sys.stderr)
@@ -230,6 +292,7 @@ def run_help(argv: list[str] | None, source: HelpSource) -> int:
                 print("rtfm: manual page topics cannot contain spaces", file=sys.stderr)
                 return 2
             topics = set(source.doc_topics())
+            _warn_about_docs_version(source)
             if requested not in topics:
                 print(f"rtfm: no installed manual page {requested!r}", file=sys.stderr)
                 return 2
@@ -309,6 +372,18 @@ def run_help(argv: list[str] | None, source: HelpSource) -> int:
     except (HelpError, OSError, json.JSONDecodeError) as error:
         print(f"rtfm: {error}", file=sys.stderr)
         return 2
+
+
+def _warn_about_docs_version(source: object) -> None:
+    check = getattr(source, "docs_version_warning", None)
+    if check is None:
+        return
+    try:
+        warning = check()
+    except HelpError:
+        return
+    if warning is not None:
+        print(f"rtfm: warning: {warning}", file=sys.stderr)
 
 
 def _require_standalone(args: argparse.Namespace, selected: str) -> None:

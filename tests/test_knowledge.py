@@ -242,6 +242,33 @@ def test_missing_packaged_docs_explain_how_to_configure_them(monkeypatch):
         source.doc_topics()
 
 
+def test_configured_docs_warn_when_release_does_not_match_jj(tmp_path, monkeypatch):
+    docs = tmp_path / "jj-source" / "docs"
+    docs.mkdir(parents=True)
+    (docs / "index.md").write_text("# Index\n", encoding="utf-8")
+    (docs.parent / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [9.8.0] - 2099-01-01\n", encoding="utf-8"
+    )
+    source = HelpSource(docs_dir=docs)
+    monkeypatch.setattr(source, "_version_number", lambda: "9.9.0")
+
+    assert source.docs_version_warning() == (
+        "configured jj docs are for 9.8.0, but installed jj is 9.9.0; "
+        "set JJ_SENSEI_DOCS_DIR to matching docs"
+    )
+
+
+def test_configured_docs_sidecar_can_pin_a_docs_only_copy(tmp_path, monkeypatch):
+    docs = tmp_path / "downloaded-docs"
+    docs.mkdir()
+    (docs / "index.md").write_text("# Index\n", encoding="utf-8")
+    (docs / ".jj-version").write_text("9.9.0\n", encoding="utf-8")
+    source = HelpSource(docs_dir=docs)
+    monkeypatch.setattr(source, "_version_number", lambda: "9.9.0")
+
+    assert source.docs_version_warning() is None
+
+
 def test_manifest_lock_cli_is_prose_free(capsys):
     assert run_help(["--manifest-lock"], FakeSource()) == 0
     lock = json.loads(capsys.readouterr().out)

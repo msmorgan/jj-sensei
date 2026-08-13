@@ -36,7 +36,9 @@ packaged `docs/bookmarks` page.
 The helper first looks for docs shipped beside the resolved jj executable. Set
 `JJ_SENSEI_DOCS_DIR=/path/to/jj/docs` when a package uses an unusual layout. If
 no docs directory is detected, the helper reports that configuration and does
-not fetch documentation from the network.
+not fetch documentation from the network. For configured docs, it warns when
+version metadata beside the directory does not match the installed jj. Add a
+`.jj-version` file containing the release number when keeping only `docs/`.
 
 Treat all output as authoritative for the installed jj version. Repository and
 startup safety policy remains authoritative about which otherwise-valid jj

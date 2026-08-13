@@ -60,7 +60,9 @@ Command and language help comes from the local executable. Manual pages come
 from the package when detected, or from an explicit `JJ_SENSEI_DOCS_DIR` for
 unusual layouts. The helper does not fetch missing documentation. Tests
 fingerprint both surfaces when available so jj upgrades expose new commands,
-options, language features, and pages for deliberate review.
+options, language features, and pages for deliberate review. Configured manual
+trees also warn when detectable version metadata has drifted from the installed
+jj; docs-only copies can provide a `.jj-version` sidecar.
 
 ### harmony
 
