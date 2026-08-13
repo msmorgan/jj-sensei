@@ -34,15 +34,18 @@ command.
 - `0` — clean; rerun the operation that originally exposed the problem.
 - `1` — stopped on the oldest remaining conflict. Edit every listed marker,
   then rerun the same `repair` command.
-- `2` — safe refusal or a jj step failed. Pause and present the helper's
-  diagnosis and suggestion before doing anything else. Do not improvise a
-  recovery command.
+- `70` — an internal error occurred. Transaction state is preserved; present
+  the diagnosis and do not improvise a recovery command.
 - `75` — another repair holds the workspace lock. Rerun after it finishes.
+- `80` — human judgment is required. Present the reported state and ask before
+  continuing.
 
-Every successful state transition is journaled. If a jj step fails, the helper
-runs no subsequent jj command, performs no operation-log rollback, preserves
-its journal, and tells the caller what to inspect. Never use `undo`, `redo`,
-`op restore`, `--ignore-immutable`, `--config`, or `--config-file` as recovery.
+These actions apply only to this helper's exit status, not to an ordinary jj
+invocation rejected for invalid syntax or options. Every successful state
+transition is journaled. After an internal error, the helper runs no later
+transaction step, performs no operation-log rollback, preserves its journal,
+and tells the caller what to inspect. Never use `undo`, `redo`, `op restore`,
+`--ignore-immutable`, `--config`, or `--config-file` as recovery.
 
 The resolver temporarily pins an empty undescribed tip with a description while
 it descends, then restores the original description. It never creates, moves,

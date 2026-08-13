@@ -5,6 +5,11 @@ import uuid
 
 from jj_sensei.jj import Jj, JjError
 from jj_sensei.repair import (
+    EXIT_CLEAN,
+    EXIT_EDIT_REQUIRED,
+    EXIT_HUMAN_REQUIRED,
+    EXIT_INTERNAL_ERROR,
+    EXIT_LOCK_TIMEOUT,
     HumanRequired,
     LockTimeout,
     ResolutionState,
@@ -16,6 +21,14 @@ from jj_sensei.repair import (
     run_resolve,
 )
 from jj_sensei.setup import run_setup
+
+
+def test_guarded_helper_exit_status_contract():
+    assert EXIT_CLEAN == 0
+    assert EXIT_EDIT_REQUIRED == 1
+    assert EXIT_INTERNAL_ERROR == 70
+    assert EXIT_LOCK_TIMEOUT == 75
+    assert EXIT_HUMAN_REQUIRED == 80
 
 
 def _make_conflicted_feature(jj_repo):
@@ -269,10 +282,11 @@ def test_repair_refuses_different_nonempty_successors(jj_repo, capsys):
     jj_repo.run(jj_repo.root, "rebase", "-r", "feature@", "-d", "default@-")
     jj_repo.write(feature, "right.txt", "right side\n")
 
-    assert run_repair(feature) == 2
+    assert run_repair(feature) == EXIT_HUMAN_REQUIRED
     error = capsys.readouterr().err
     assert "different nonempty work" in error
-    assert "paused without running another jj command" in error
+    assert "human judgment required" in error
+    assert "no later transaction step was attempted" in error.casefold()
     assert Jj(feature).commits("divergent()")
 
 
@@ -300,11 +314,12 @@ def test_failed_jj_step_stops_before_any_followup(tmp_path, monkeypatch, capsys)
     fake = FailingJj()
     monkeypatch.setattr("jj_sensei.repair.Jj", lambda _cwd=None: fake)
 
-    assert run_repair(root) == 2
+    assert run_repair(root) == EXIT_INTERNAL_ERROR
     assert fake.calls == [("workspace", "update-stale")]
     error = capsys.readouterr().err
-    assert "no subsequent jj command was run" in error
-    assert "Pause" in error
+    assert "internal error occurred" in error
+    assert "no later transaction step was attempted" in error.casefold()
+    assert "do not improvise recovery" in error
 
 
 def test_workspace_lock_times_out_while_held(tmp_path):

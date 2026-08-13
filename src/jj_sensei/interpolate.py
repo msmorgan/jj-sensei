@@ -34,8 +34,9 @@ from .jj import Commit, Jj, JjError, safe_revision
 from .repair import (
     EXIT_CLEAN,
     EXIT_EDIT_REQUIRED,
+    EXIT_HUMAN_REQUIRED,
+    EXIT_INTERNAL_ERROR,
     EXIT_LOCK_TIMEOUT,
-    EXIT_PAUSED,
     HumanRequired,
     LockTimeout,
     WorkspaceLock,
@@ -641,34 +642,38 @@ def _run_locked(name: str, cwd: Path | str | None, operation) -> int:
         print(f"{name}: {error}; rerun after the other command finishes.", file=sys.stderr)
         return EXIT_LOCK_TIMEOUT
     except JjError as error:
-        print(f"{name}: jj step failed; no subsequent jj command was run.", file=sys.stderr)
+        print(f"{name}: internal error occurred; transaction state was preserved.", file=sys.stderr)
         print(f"  command: {error.rendered_command}", file=sys.stderr)
         if error.stdout.strip():
             print(error.stdout.rstrip(), file=sys.stderr)
         if error.stderr.strip():
             print(error.stderr.rstrip(), file=sys.stderr)
         print(
-            "State is preserved. Do not use an immutability bypass or operation-log recovery. "
-            "Pause, inspect `jj --no-pager st`, and ask before continuing.",
+            "No later transaction step was attempted. Do not use an immutability bypass or "
+            "operation-log recovery. Inspect `jj --no-pager st` and present the diagnosis; "
+            "do not improvise recovery.",
             file=sys.stderr,
         )
-        return EXIT_PAUSED
+        return EXIT_INTERNAL_ERROR
     except HumanRequired as error:
         print(str(error), file=sys.stderr)
         print(
-            f"{name}: paused without running another jj command. Inspect the reported state "
-            "and ask before continuing.",
+            f"{name}: human judgment required; no later transaction step was attempted. "
+            "Present the reported state and ask before continuing.",
             file=sys.stderr,
         )
-        return EXIT_PAUSED
+        return EXIT_HUMAN_REQUIRED
     except (OSError, RuntimeError, ValueError) as error:
-        print(f"{name}: paused: {error}", file=sys.stderr)
         print(
-            f"{name}: no further recovery command was attempted. Inspect the workspace and ask "
-            "before continuing.",
+            f"{name}: internal error occurred; transaction state was preserved: {error}",
             file=sys.stderr,
         )
-        return EXIT_PAUSED
+        print(
+            f"{name}: no later transaction step or recovery command was attempted. "
+            "Present the diagnosis; do not improvise recovery.",
+            file=sys.stderr,
+        )
+        return EXIT_INTERNAL_ERROR
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -683,7 +688,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
         epilog=(
             "Exit 0 when clean; 1 when the working copy awaits your edits; "
-            "2 on safe refusal; 75 if locked."
+            "70 on internal error; 75 if locked; 80 when human judgment is required."
         ),
     )
     commands = parser.add_subparsers(dest="phase", required=True)

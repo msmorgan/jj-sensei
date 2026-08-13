@@ -7,6 +7,7 @@ import pytest
 from jj_sensei import interpolate
 from jj_sensei.interpolate import StateStore, run_abort, run_begin, run_finish
 from jj_sensei.jj import Jj, JjError
+from jj_sensei.repair import EXIT_HUMAN_REQUIRED, EXIT_INTERNAL_ERROR
 from jj_sensei.setup import run_setup
 
 
@@ -223,7 +224,7 @@ def test_begin_refuses_endpoints_that_do_not_form_an_edge(jj_repo, capsys):
             before=target.change_id,
             message="not actually between them",
         )
-        == 2
+        == EXIT_HUMAN_REQUIRED
     )
     assert "requested edge does not exist" in capsys.readouterr().err
     assert StateStore(jj_repo.root).load() is None
@@ -263,7 +264,7 @@ def test_begin_resumes_after_each_history_mutation(jj_repo, monkeypatch, command
     after, target = _make_target(jj_repo)
     _crash_after(monkeypatch, jj_repo.root, command)
 
-    assert _begin(jj_repo, after, target) == 2
+    assert _begin(jj_repo, after, target) == EXIT_INTERNAL_ERROR
     monkeypatch.setattr(interpolate, "Jj", Jj)
     assert _begin(jj_repo, after, target) == 1
     assert StateStore(jj_repo.root).load().phase == "editing"
@@ -275,7 +276,7 @@ def test_begin_resumes_after_pinning_an_empty_return_commit(jj_repo, monkeypatch
     return_change_id = Jj(jj_repo.root).one_commit("@").change_id
     _crash_after(monkeypatch, jj_repo.root, "describe")
 
-    assert _begin(jj_repo, after, target) == 2
+    assert _begin(jj_repo, after, target) == EXIT_INTERNAL_ERROR
     monkeypatch.setattr(interpolate, "Jj", Jj)
     assert _begin(jj_repo, after, target) == 1
     state = StateStore(jj_repo.root).load()
@@ -290,7 +291,7 @@ def test_abort_after_interrupted_pin_removes_the_cursor(jj_repo, monkeypatch):
     return_change_id = Jj(jj_repo.root).one_commit("@").change_id
     _crash_after(monkeypatch, jj_repo.root, "describe")
 
-    assert _begin(jj_repo, after, target) == 2
+    assert _begin(jj_repo, after, target) == EXIT_INTERNAL_ERROR
     monkeypatch.setattr(interpolate, "Jj", Jj)
     assert run_abort(jj_repo.root) == 0
 
@@ -304,7 +305,7 @@ def test_abort_after_interrupted_insert_removes_the_new_commit(jj_repo, monkeypa
     after, target = _make_target(jj_repo)
     _crash_after(monkeypatch, jj_repo.root, "new")
 
-    assert _begin(jj_repo, after, target) == 2
+    assert _begin(jj_repo, after, target) == EXIT_INTERNAL_ERROR
     inserted_change_id = Jj(jj_repo.root).one_commit("@").change_id
     monkeypatch.setattr(interpolate, "Jj", Jj)
     assert run_abort(jj_repo.root) == 0
@@ -321,7 +322,7 @@ def test_finish_resumes_after_restoring_the_target(jj_repo, monkeypatch):
     _write_intermediate(jj_repo)
     _crash_after(monkeypatch, jj_repo.root, "restore")
 
-    assert run_finish(jj_repo.root) == 2
+    assert run_finish(jj_repo.root) == EXIT_INTERNAL_ERROR
     monkeypatch.setattr(interpolate, "Jj", Jj)
     assert run_finish(jj_repo.root) == 0
     assert Jj(jj_repo.root).one_commit("@").change_id == target.change_id
@@ -333,7 +334,7 @@ def test_finish_resumes_after_returning_to_the_original_working_copy(jj_repo, mo
     _write_intermediate(jj_repo)
     _crash_after(monkeypatch, jj_repo.root, "edit")
 
-    assert run_finish(jj_repo.root) == 2
+    assert run_finish(jj_repo.root) == EXIT_INTERNAL_ERROR
     monkeypatch.setattr(interpolate, "Jj", Jj)
     assert run_finish(jj_repo.root) == 0
     assert Jj(jj_repo.root).one_commit("@").change_id == target.change_id
@@ -347,7 +348,7 @@ def test_finish_resumes_after_unpinning_the_original_working_copy(jj_repo, monke
     _write_intermediate(jj_repo)
     _crash_after(monkeypatch, jj_repo.root, "describe")
 
-    assert run_finish(jj_repo.root) == 2
+    assert run_finish(jj_repo.root) == EXIT_INTERNAL_ERROR
     monkeypatch.setattr(interpolate, "Jj", Jj)
     assert run_finish(jj_repo.root) == 0
 
@@ -364,7 +365,7 @@ def test_abort_resumes_after_each_history_mutation(jj_repo, monkeypatch, command
     _write_intermediate(jj_repo)
     _crash_after(monkeypatch, jj_repo.root, command)
 
-    assert run_abort(jj_repo.root) == 2
+    assert run_abort(jj_repo.root) == EXIT_INTERNAL_ERROR
     monkeypatch.setattr(interpolate, "Jj", Jj)
     assert run_abort(jj_repo.root) == 0
     assert StateStore(jj_repo.root).load() is None

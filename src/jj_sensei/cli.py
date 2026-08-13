@@ -22,13 +22,19 @@ def parser() -> argparse.ArgumentParser:
             "safe divergent successors, then resolve mutable conflicts oldest-first."
         ),
     )
-    repair.epilog = "Exit 0 when clean; 1 for a requested edit; 2 on safe refusal; 75 if locked."
+    repair.epilog = (
+        "Exit 0 when clean; 1 for a requested edit; 70 on internal error; "
+        "75 if locked; 80 when human judgment is required."
+    )
     resolve = commands.add_parser(
         "resolve",
         help="walk mutable conflicts oldest-first",
         description="Run only the resumable oldest-first mutable-conflict walk.",
     )
-    resolve.epilog = "Exit 0 when clean; 1 for a requested edit; 2 on safe refusal; 75 if locked."
+    resolve.epilog = (
+        "Exit 0 when clean; 1 for a requested edit; 70 on internal error; "
+        "75 if locked; 80 when human judgment is required."
+    )
     converge = commands.add_parser(
         "converge",
         help="converge equivalent divergent working-copy successors",
@@ -37,7 +43,9 @@ def parser() -> argparse.ArgumentParser:
             "successors; refuse ambiguous work."
         ),
     )
-    converge.epilog = "Exit 0 on success; 2 on safe refusal; 75 if locked."
+    converge.epilog = (
+        "Exit 0 on success; 70 on internal error; 75 if locked; 80 when human judgment is required."
+    )
     setup = commands.add_parser(
         "setup",
         help="install the workspace immutability aliases",
@@ -45,6 +53,10 @@ def parser() -> argparse.ArgumentParser:
     )
     setup.add_argument(
         "--check", action="store_true", help="audit config context and topology only"
+    )
+    setup.epilog = (
+        "Exit 0 when verified; 70 on internal error; 75 if locked; "
+        "80 when human judgment is required."
     )
     status = commands.add_parser(
         "status",

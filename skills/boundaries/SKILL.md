@@ -12,6 +12,12 @@ path from this loaded `SKILL.md`, not from the target repository:
 "<skill-dir>/scripts/setup-immutability"
 ```
 
+The helper exits `0` when verification succeeds, `70` after an internal error,
+`75` when another transaction holds the lock, and `80` when the workspace or
+topology requires human judgment. Present a `70` or `80` diagnosis instead of
+improvising a recovery command. These statuses belong to the helper; ordinary
+jj syntax and option errors do not invoke this protocol.
+
 The helper installs four readable repository revset aliases:
 
 ```toml

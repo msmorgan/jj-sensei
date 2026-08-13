@@ -40,10 +40,15 @@ a pipe.
 
 - `0` — finished or aborted cleanly.
 - `1` — edit the constructed intermediate state, then run `finish`.
-- `2` — safe refusal or failed jj step. Pause, present the diagnosis, and ask
-  before continuing. Do not invent recovery commands.
+- `70` — an internal error occurred. Transaction state is preserved; present
+  the diagnosis and do not improvise a recovery command.
 - `75` — another jj-sensei history transaction holds the workspace lock; retry
   after it finishes.
+- `80` — human judgment is required. Present the reported state and ask before
+  continuing.
+
+These actions apply only to this helper's exit status, not to an ordinary jj
+invocation rejected for invalid syntax or options.
 
 Do not edit or delete `.jj/jj-sensei/interpolate.json`. Do not use operation-log
 recovery, immutability bypasses, or a manual abandon as recovery. If `begin` was

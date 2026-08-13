@@ -23,13 +23,14 @@ else:  # pragma: no cover - the lock behavior is tested, not the platform import
 
 EXIT_CLEAN = 0
 EXIT_EDIT_REQUIRED = 1
-EXIT_PAUSED = 2
+EXIT_INTERNAL_ERROR = 70
 EXIT_LOCK_TIMEOUT = 75
+EXIT_HUMAN_REQUIRED = 80
 _MARKER = re.compile(r"^(<{7,}|>{7,}) conflict [0-9]+ of [0-9]+")
 
 
 class HumanRequired(RuntimeError):
-    """The helper cannot choose safely; no more jj commands should run."""
+    """The helper cannot choose safely; no later transaction step should run."""
 
 
 class LockTimeout(RuntimeError):
@@ -602,36 +603,40 @@ def _run_locked(name: str, cwd: Path | str | None, operation) -> int:
         print(f"{name}: {error}; rerun after the other repair finishes.", file=sys.stderr)
         return EXIT_LOCK_TIMEOUT
     except JjError as error:
-        _print_failed_step(name, error)
-        return EXIT_PAUSED
+        _print_internal_error(name, error)
+        return EXIT_INTERNAL_ERROR
     except HumanRequired as error:
         print(str(error), file=sys.stderr)
         print(
-            f"{name}: paused without running another jj command. Inspect the reported state and "
-            f"ask before continuing; when it is understood, rerun {name}.",
+            f"{name}: human judgment required; no later transaction step was attempted. "
+            f"Present the reported state and ask before continuing; when it is understood, "
+            f"rerun {name}.",
             file=sys.stderr,
         )
-        return EXIT_PAUSED
+        return EXIT_HUMAN_REQUIRED
     except (OSError, RuntimeError, ValueError) as error:
-        print(f"{name}: paused: {error}", file=sys.stderr)
         print(
-            f"{name}: no further recovery command was attempted. Inspect the workspace and ask "
-            "before continuing.",
+            f"{name}: internal error occurred; transaction state was preserved: {error}",
             file=sys.stderr,
         )
-        return EXIT_PAUSED
+        print(
+            f"{name}: no later transaction step or recovery command was attempted. "
+            "Present the diagnosis; do not improvise recovery.",
+            file=sys.stderr,
+        )
+        return EXIT_INTERNAL_ERROR
 
 
-def _print_failed_step(name: str, error: JjError) -> None:
-    print(f"{name}: jj step failed; no subsequent jj command was run.", file=sys.stderr)
+def _print_internal_error(name: str, error: JjError) -> None:
+    print(f"{name}: internal error occurred; transaction state was preserved.", file=sys.stderr)
     print(f"  command: {error.rendered_command}", file=sys.stderr)
     if error.stdout.strip():
         print(error.stdout.rstrip(), file=sys.stderr)
     if error.stderr.strip():
         print(error.stderr.rstrip(), file=sys.stderr)
     print(
-        "State is preserved. Do not use an immutability bypass or operation-log recovery. "
-        "Pause, inspect `jj --no-pager st`, and suggest rerunning this command once the "
-        "workspace is stable; if the error says immutable, report the live workspace ancestry.",
+        "No later transaction step was attempted. Do not use an immutability bypass or "
+        "operation-log recovery. Inspect `jj --no-pager st` and present the diagnosis; "
+        "do not improvise recovery.",
         file=sys.stderr,
     )

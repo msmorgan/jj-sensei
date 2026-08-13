@@ -82,8 +82,10 @@ diagnosis when human judgment is required. Narrower tools are included for
 inspecting conflict markers, accepting a specifically chosen representation,
 and running conservative mechanical resolutions.
 
-It never performs operation-log surgery, bypasses immutability, or silently
-continues after a failed jj command.
+It never performs operation-log surgery or bypasses immutability. Within a
+repair invocation, an internal error preserves the journal and prevents later
+transaction steps; it does not turn ordinary jj command errors into a reason to
+stop and ask for permission.
 
 ### wisdom
 

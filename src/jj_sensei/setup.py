@@ -8,7 +8,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .jj import Jj, JjError, Workspace, safe_revision
-from .repair import EXIT_CLEAN, EXIT_LOCK_TIMEOUT, EXIT_PAUSED, LockTimeout, WorkspaceLock
+from .repair import (
+    EXIT_CLEAN,
+    EXIT_HUMAN_REQUIRED,
+    EXIT_INTERNAL_ERROR,
+    EXIT_LOCK_TIMEOUT,
+    LockTimeout,
+    WorkspaceLock,
+)
 
 ALIASES = {
     'revset-aliases."other_workspaces()"': "working_copies() ~ @",
@@ -60,7 +67,7 @@ def run_setup(cwd: Path | str | None = None, *, check_only: bool = False) -> int
                 f"setup: run from the default workspace, not {current.name!r}; no config changed.",
                 file=sys.stderr,
             )
-            return EXIT_PAUSED
+            return EXIT_HUMAN_REQUIRED
         with WorkspaceLock(root):
             if not check_only:
                 for key, value in ALIASES.items():
@@ -70,19 +77,31 @@ def run_setup(cwd: Path | str | None = None, *, check_only: bool = False) -> int
             _verify_default_context(jj)
             overlaps = workspace_overlaps(jj)
             _report_overlaps(overlaps)
-            return EXIT_PAUSED if overlaps else EXIT_CLEAN
+            return EXIT_HUMAN_REQUIRED if overlaps else EXIT_CLEAN
     except LockTimeout as error:
         print(f"setup: {error}; rerun after the other operation finishes.", file=sys.stderr)
         return EXIT_LOCK_TIMEOUT
     except JjError as error:
-        print("setup: jj step failed; no subsequent jj command was run.", file=sys.stderr)
+        print("setup: internal error occurred; no later setup step was attempted.", file=sys.stderr)
         print(f"  command: {error.rendered_command}", file=sys.stderr)
         if error.stderr.strip():
             print(error.stderr.rstrip(), file=sys.stderr)
-        return EXIT_PAUSED
-    except (OSError, RuntimeError, ValueError) as error:
-        print(f"setup: paused: {error}", file=sys.stderr)
-        return EXIT_PAUSED
+        return EXIT_INTERNAL_ERROR
+    except RuntimeError as error:
+        if check_only:
+            print(f"setup: human judgment required: {error}", file=sys.stderr)
+            return EXIT_HUMAN_REQUIRED
+        print(
+            f"setup: internal error occurred; no later setup step was attempted: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_INTERNAL_ERROR
+    except (OSError, ValueError) as error:
+        print(
+            f"setup: internal error occurred; no later setup step was attempted: {error}",
+            file=sys.stderr,
+        )
+        return EXIT_INTERNAL_ERROR
 
 
 def _verify_default_context(jj: Jj) -> None:

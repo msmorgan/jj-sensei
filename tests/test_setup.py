@@ -1,4 +1,5 @@
 from jj_sensei.jj import Jj
+from jj_sensei.repair import EXIT_HUMAN_REQUIRED
 from jj_sensei.setup import run_setup, workspace_overlaps
 
 
@@ -48,7 +49,7 @@ def test_setup_alias_is_contextual_and_reports_nested_workspaces(jj_repo):
 
 def test_setup_refuses_non_default_workspace(jj_repo):
     feature = jj_repo.add_workspace("feature")
-    assert run_setup(feature) == 2
+    assert run_setup(feature) == EXIT_HUMAN_REQUIRED
 
 
 def test_overlap_audit_catches_shared_feature_only_ancestor(jj_repo):
@@ -76,8 +77,10 @@ def test_overlap_audit_catches_shared_feature_only_ancestor(jj_repo):
 
 
 def test_setup_check_refuses_missing_aliases(jj_repo, capsys):
-    assert run_setup(jj_repo.root, check_only=True) == 2
-    assert "missing or differs" in capsys.readouterr().err
+    assert run_setup(jj_repo.root, check_only=True) == EXIT_HUMAN_REQUIRED
+    error = capsys.readouterr().err
+    assert "human judgment required" in error
+    assert "missing or differs" in error
 
 
 def test_setup_accepts_a_workspace_parked_on_an_immutable_head(jj_repo):
