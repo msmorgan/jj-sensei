@@ -163,7 +163,6 @@ src/jj_sensei/            shared Python implementation
 For local package development:
 
 ```bash
-python -m pip install -e '.[dev]'
-pytest
-ruff check .
+uv run --extra dev pytest
+uv run --extra dev ruff check .
 ```
