@@ -32,6 +32,16 @@ the introduction, essential grammar where applicable, and a section outline.
 Use `--search TERM` to extract matching official definitions or sections and
 `--full` only when the complete topic is needed.
 
+`--search` belongs to `rtfm` alone. Passing it to `rtfd` is a usage error; the
+two helpers select depth differently, so read the paragraph below before
+composing an `rtfd` call.
+
+A `--search` hit is an extract, not a section. `rtfm config --search TERM`
+often returns a stub that opens mid-section and trails off into a neighboring
+option's prose. Treat a result that does not read as a complete definition as a
+pointer, and re-read the whole section with `rtfd docs/config --section
+HEADING`.
+
 Route links from executable help back through the installed manual. For a link
 under `https://docs.jj-vcs.dev/latest/PAGE`, strip that prefix and any trailing
 slash, then run `rtfd docs/PAGE`; for example, links from `rtfm git --full` map
@@ -42,12 +52,15 @@ fetch documentation for another jj version from the web.
 Use `rtfd` and the explicit `docs/` prefix for broader manual pages. `--list`
 discovers their names, including nested pages such as
 `docs/guides/divergence`; `--toc`, `--section HEADING`, and `--full` select how
-much to read. Use `--yaml-table docs/PAGE.yml` when a page references an
+much to read, and they are mutually exclusive. `--toc` first, then `--section`
+on a heading it printed, is the cheapest route into a long page. Use
+`--yaml-table docs/PAGE.yml` when a page references an
 official YAML table asset. The Git command table is only about 60 compact
 rows, so loading it whole is reasonable when the complete inventory is useful.
 If you will not need all roughly 60 rows, add `--search-git 'regex'` or
 `--search-jj 'regex'` to filter only that command field with a case-sensitive
-regular expression; combine several commands with regex alternation. The
+regular expression; combine several commands with regex alternation. Those two
+filters apply only to `--yaml-table`; use `--section` on a Markdown page. The
 namespace intentionally distinguishes embedded `bookmarks` help from the
 packaged `docs/bookmarks` page.
 
