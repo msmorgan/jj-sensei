@@ -33,6 +33,25 @@ The helper installs four readable repository revset aliases:
 `condition` is nonempty and `none()` otherwise. `not_default()` is nonempty
 only outside the `default` workspace.
 
+In `default`, the custom term collapses to `none()` and only jj's built-in
+immutable heads remain, leaving the coordinator able to rewrite feature
+stacks. Elsewhere, every other live working-copy commit becomes an immutable
+head, protecting it and its ancestors. This is a guardrail, not complete
+isolation: unrelated mutable changes outside another working copy's ancestry
+stay writable.
+
+jj treats `::(immutable_heads() | root())` as immutable. Read the active
+definition and every alias behind it:
+
+```bash
+jj --no-pager config get "revset-aliases.'immutable_heads()'"
+jj --no-pager config get revset-aliases
+```
+
+To find out why one particular revision is protected — which clause captures
+it and which bookmark or tag anchors that clause — use the `wisdom` skill's
+read-only `why-immutable` helper.
+
 The helper verifies that the custom term collapses in `default`, then audits
 active workspaces for shared feature-only ancestry. Treat an overlap report as
 a safe stop: the guard is working, but later rewrites can be unexpectedly
