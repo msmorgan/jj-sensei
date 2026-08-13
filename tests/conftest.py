@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,6 +42,16 @@ class JjRepo:
 
     def commit(self, cwd: Path, message: str) -> None:
         self.run(cwd, "commit", "-m", message)
+
+    def orphan_workspace(self, name: str) -> Path:
+        """Register a workspace, then delete its directory behind jj's back.
+
+        This is the shape of a real incident: the registration survives, and
+        jj can no longer resolve that workspace's root.
+        """
+        destination = self.add_workspace(name)
+        shutil.rmtree(destination)
+        return destination
 
     def add_workspace(self, name: str) -> Path:
         destination = self.root.parent / name

@@ -37,9 +37,18 @@ class Overlap:
     fork_description: str
 
 
+def orphaned_workspaces(jj: Jj) -> list[Workspace]:
+    """Find registrations whose working-copy directory no longer resolves."""
+    return [workspace for workspace in jj.workspaces() if workspace.orphaned]
+
+
 def workspace_overlaps(jj: Jj) -> list[Overlap]:
     """Find pairs sharing feature-only ancestry outside the default line."""
-    workspaces = [workspace for workspace in jj.workspaces() if workspace.name != "default"]
+    workspaces = [
+        workspace
+        for workspace in jj.workspaces()
+        if workspace.name != "default" and not workspace.orphaned
+    ]
     overlaps = []
     for left, right in itertools.combinations(workspaces, 2):
         safe_revision(left.commit_id)
@@ -69,6 +78,11 @@ def run_setup(cwd: Path | str | None = None, *, check_only: bool = False) -> int
             )
             return EXIT_HUMAN_REQUIRED
         with WorkspaceLock(root):
+            # Report this before anything that evaluates a workspace revset:
+            # an orphaned registration is the root cause an alias or topology
+            # complaint would otherwise bury.
+            orphaned = orphaned_workspaces(jj)
+            _report_orphaned(orphaned)
             if not check_only:
                 for key, value in ALIASES.items():
                     jj.run("config", "set", "--repo", key, value)
@@ -77,7 +91,7 @@ def run_setup(cwd: Path | str | None = None, *, check_only: bool = False) -> int
             _verify_default_context(jj)
             overlaps = workspace_overlaps(jj)
             _report_overlaps(overlaps)
-            return EXIT_HUMAN_REQUIRED if overlaps else EXIT_CLEAN
+            return EXIT_HUMAN_REQUIRED if (orphaned or overlaps) else EXIT_CLEAN
     except LockTimeout as error:
         print(f"setup: {error}; rerun after the other operation finishes.", file=sys.stderr)
         return EXIT_LOCK_TIMEOUT
@@ -126,6 +140,25 @@ def _verify_aliases(jj: Jj) -> None:
                 f"alias {key} is missing or differs; expected {expected!r}, found {actual!r}"
             )
     print("setup: verified all four alias definitions.")
+
+
+def _report_orphaned(orphaned: list[Workspace]) -> None:
+    if not orphaned:
+        return
+    print(
+        "setup: orphaned workspace registrations detected. Each is still registered in this repo, "
+        "but its working-copy directory could not be resolved:",
+        file=sys.stderr,
+    )
+    for workspace in orphaned:
+        print(f"  {workspace.name}: {workspace.root_error}", file=sys.stderr)
+    names = " ".join(workspace.name for workspace in orphaned)
+    print(
+        f"Ask the user whether to run `jj workspace forget {names}`. A missing directory can also "
+        "be a temporarily absent mount, and workspace lifecycle is the user's call; do not forget "
+        "a workspace on your own.",
+        file=sys.stderr,
+    )
 
 
 def _report_overlaps(overlaps: list[Overlap]) -> None:

@@ -76,6 +76,9 @@ def _render_locked(jj: Jj, root: Path) -> Status:
         line += f" | ⚠ {conflicted} conflicted"
     if bookmarks:
         line += f" | ⚠ bookmark '{bookmarks}' on @"
+    orphaned = [other.name for other in jj.workspaces() if other.orphaned]
+    if orphaned:
+        line += f" | ⚠ orphaned workspace '{','.join(orphaned)}' — needs `jj workspace forget`"
     return Status(root, line)
 
 

@@ -58,6 +58,13 @@ a safe stop: the guard is working, but later rewrites can be unexpectedly
 blocked. Never bypass the guard. Ask the user how the live stacks should be
 restructured.
 
+A workspace listing that cannot resolve one workspace's root means an orphaned
+registration: the workspace is still recorded in the repository, but its
+directory is gone. The helper reports the name and jj's own diagnosis and
+stops for human judgment. `jj workspace forget <name>` clears it, but that is
+the user's call — a missing directory can equally be an unmounted volume, and
+workspace lifecycle is not an agent decision. Report it and ask.
+
 To audit without changing configuration:
 
 ```bash

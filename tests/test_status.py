@@ -279,3 +279,14 @@ def test_status_hook_manifest_handles_plugin_root_with_spaces(jj_repo, tmp_path)
     assert json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"].startswith(
         "jj: default | @ "
     )
+
+
+def test_status_survives_and_flags_an_orphaned_workspace(jj_repo):
+    jj_repo.orphan_workspace("dead")
+
+    status = render_status(jj_repo.root)
+
+    assert status is not None
+    assert status.line.startswith("jj: default | @ ")
+    assert "⚠ orphaned workspace 'dead'" in status.line
+    assert "jj workspace forget" in status.line

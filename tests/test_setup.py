@@ -100,3 +100,26 @@ def test_setup_accepts_a_workspace_parked_on_an_immutable_head(jj_repo):
     assert run_setup(jj_repo.root) == 0
     assert run_setup(jj_repo.root, check_only=True) == 0
     assert parked.exists()
+
+
+def test_setup_check_diagnoses_an_orphaned_workspace_without_forgetting_it(jj_repo, capsys):
+    assert run_setup(jj_repo.root) == 0
+    jj_repo.orphan_workspace("dead")
+
+    status = run_setup(jj_repo.root, check_only=True)
+    captured = capsys.readouterr()
+
+    assert status == EXIT_HUMAN_REQUIRED
+    assert "orphaned workspace registrations" in captured.err
+    assert "dead" in captured.err
+    assert "No such file or directory" in captured.err
+    assert "jj workspace forget dead" in captured.err
+
+    still_registered = jj_repo.run(jj_repo.root, "workspace", "list").stdout
+    assert "dead" in still_registered
+
+
+def test_setup_ignores_orphaned_workspaces_when_auditing_overlap(jj_repo):
+    jj_repo.orphan_workspace("dead")
+
+    assert workspace_overlaps(Jj(jj_repo.root)) == []

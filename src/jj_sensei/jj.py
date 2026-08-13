@@ -24,6 +24,11 @@ _COMMIT_TEMPLATE = (
     "',\"conflict\":', json(conflict), "
     "'}', \"\\n\")"
 )
+# `root` is rendered last on purpose. A workspace whose directory is gone
+# stays registered, and jj renders its root as an inline `<Error: ...>`
+# placeholder instead of a value, which makes the row invalid JSON. `name` and
+# `target.commit_id()` cannot fail, so putting `root` last keeps every other
+# field recoverable by truncating the row at the property that failed.
 _WORKSPACE_TEMPLATE = (
     "concat("
     "'{\"name\":', json(name), "
@@ -31,6 +36,7 @@ _WORKSPACE_TEMPLATE = (
     "',\"root\":', json(stringify(root)), "
     "'}', \"\\n\")"
 )
+_ROOT_PROPERTY = ',"root":'
 
 
 @dataclass(frozen=True)
@@ -47,7 +53,13 @@ class Commit:
 class Workspace:
     name: str
     commit_id: str
-    root: Path
+    root: Path | None
+    root_error: str | None = None
+
+    @property
+    def orphaned(self) -> bool:
+        """Registered in the repo, but its working-copy directory is gone."""
+        return self.root is None
 
 
 class JjError(RuntimeError):
@@ -98,6 +110,12 @@ class Jj:
         ).resolve()
 
     def workspaces(self) -> list[Workspace]:
+        """List every registered workspace, including orphaned registrations.
+
+        One workspace whose root cannot be resolved must not hide the others:
+        the status hook, boundaries setup, and repair all enumerate from here,
+        and a single dead registration used to take all of them down at once.
+        """
         result = self.run(
             "workspace",
             "list",
@@ -106,17 +124,18 @@ class Jj:
             ignore_working_copy=True,
         )
         return [
-            Workspace(
-                name=item["name"],
-                commit_id=item["commit_id"],
-                root=Path(item["root"]).resolve(),
-            )
-            for item in _json_lines(result.stdout)
+            parse_workspace(line) for line in result.stdout.splitlines() if line.strip()
         ]
 
     def current_workspace(self) -> Workspace:
         root = self.workspace_root()
-        matches = [workspace for workspace in self.workspaces() if workspace.root == root]
+        # An orphaned registration has no resolvable root, so it can never be
+        # the workspace this process is running in.
+        matches = [
+            workspace
+            for workspace in self.workspaces()
+            if not workspace.orphaned and workspace.root == root
+        ]
         if len(matches) != 1:
             raise RuntimeError(f"could not identify the current workspace at {root}")
         return matches[0]
@@ -186,6 +205,37 @@ def parse_conflict_path(line: str) -> str:
     if match is None:
         raise RuntimeError(f"could not read a path from `jj resolve --list` row: {line!r}")
     return match.group("path")
+
+
+def parse_workspace(line: str) -> Workspace:
+    """Read one `jj workspace list` row, tolerating an unresolvable root.
+
+    jj renders a missing workspace root as an inline `<Error: ...>` placeholder
+    and still exits 0, so the row parses as JSON only up to that property. The
+    name and commit ID before it are still trustworthy; recover them and
+    report the workspace as orphaned rather than losing the whole listing.
+    """
+    try:
+        item = json.loads(line)
+    except json.JSONDecodeError:
+        cut = line.rfind(_ROOT_PROPERTY)
+        if cut < 0:
+            raise RuntimeError(f"could not read a `jj workspace list` row: {line!r}") from None
+        try:
+            item = json.loads(f"{line[:cut]}}}")
+        except json.JSONDecodeError:
+            raise RuntimeError(f"could not read a `jj workspace list` row: {line!r}") from None
+        return Workspace(
+            name=item["name"],
+            commit_id=item["commit_id"],
+            root=None,
+            root_error=line[cut + len(_ROOT_PROPERTY) :].removesuffix("}").strip(),
+        )
+    return Workspace(
+        name=item["name"],
+        commit_id=item["commit_id"],
+        root=Path(item["root"]).resolve(),
+    )
 
 
 def safe_revision(value: str) -> str:

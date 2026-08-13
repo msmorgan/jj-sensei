@@ -26,6 +26,10 @@ the marker block or run `conflicts accept`, and stop there. Several conflicts,
 a stale workspace, or divergence in play: run `repair`, which orders the work
 and refuses the parts that need judgment.
 
+An orphaned workspace registration is neither: the status line flags it, but
+`repair` does not clear it. Load `boundaries` for the diagnosis, and leave the
+`jj workspace forget` decision to the user.
+
 If the conflicted revision is already `@`, there is no choreography to
 perform. The conflict is materialized in the files on disk, so resolving it is
 editing those files — or running `conflicts accept` — and letting the next jj
