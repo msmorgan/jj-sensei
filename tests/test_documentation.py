@@ -49,25 +49,43 @@ def test_yaml_table_parser_folds_blocks_and_preserves_empty_cells():
 
 
 def test_yaml_table_renderer_escapes_markdown_table_hazards():
-    rendered = render_yaml_table(YAML_TABLE)
+    diff_row = render_yaml_table(YAML_TABLE, search_git="git diff")
+    unsupported_row = render_yaml_table(YAML_TABLE, search_git="Not supported")
 
-    assert rendered.startswith("| Use case | Git command | Jujutsu command | Notes |\n")
-    assert r"Compare A \| B" in rendered
-    assert "Safe &lt;example&gt;" in rendered
+    assert diff_row.startswith("| Use case | Git command | Jujutsu command | Notes |\n")
+    assert r"Compare A \| B" in diff_row
+    assert "Safe &lt;example&gt;" in unsupported_row
 
 
 def test_rtfd_renders_a_canonical_yaml_table_asset(tmp_path, capsys):
     source = _source(tmp_path)
 
-    assert run_docs(["--yaml-table", "docs/git-command-table.yml"], source) == 0
+    assert (
+        run_docs(["--yaml-table", "docs/git-command-table.yml", "--search-git", "git diff"], source)
+        == 0
+    )
     assert "`jj diff --from A --to B`" in capsys.readouterr().out
 
 
-def test_rtfd_searches_only_the_git_command_column(tmp_path, capsys):
+def test_rtfd_renders_all_compact_rows_without_a_search(tmp_path, capsys):
+    source = _source(tmp_path)
+
+    assert run_docs(["--yaml-table", "docs/git-command-table.yml"], source) == 0
+    output = capsys.readouterr().out
+    assert "Compare A" in output
+    assert "Fold a long description" in output
+
+    assert (
+        run_docs(["--yaml-table", "docs/git-command-table.yml", "--search-git", "  "], source) == 2
+    )
+    assert "regular expression cannot be empty" in capsys.readouterr().err
+
+
+def test_rtfd_searches_each_command_column_explicitly(tmp_path, capsys):
     source = _source(tmp_path)
 
     assert (
-        run_docs(["--yaml-table", "docs/git-command-table.yml", "--search", "GIT DIFF"], source)
+        run_docs(["--yaml-table", "docs/git-command-table.yml", "--search-git", "git diff"], source)
         == 0
     )
     output = capsys.readouterr().out
@@ -75,15 +93,85 @@ def test_rtfd_searches_only_the_git_command_column(tmp_path, capsys):
     assert "Fold a long description" not in output
 
     assert (
-        run_docs(["--yaml-table", "docs/git-command-table.yml", "--search", "jj new"], source) == 2
+        run_docs(["--yaml-table", "docs/git-command-table.yml", "--search-git", "jj new"], source)
+        == 2
     )
     assert "no Git command matching" in capsys.readouterr().err
+
+    assert (
+        run_docs(["--yaml-table", "docs/git-command-table.yml", "--search-git", "GIT DIFF"], source)
+        == 2
+    )
+    assert "no Git command matching" in capsys.readouterr().err
+
+    assert (
+        run_docs(["--yaml-table", "docs/git-command-table.yml", "--search-jj", "jj new"], source)
+        == 0
+    )
+    output = capsys.readouterr().out
+    assert "Fold a long description" in output
+    assert "Compare A" not in output
+
+
+def test_rtfd_search_supports_regex_alternation_and_broad_results(tmp_path, capsys):
+    source = _source(tmp_path)
+    extra_rows = """\
+
+- Use case: Fetch
+  Git command: `git fetch`
+  Jujutsu command: `jj git fetch`
+  Notes:
+
+- Use case: Status
+  Git command: `git status`
+  Jujutsu command: `jj status`
+  Notes:
+"""
+    (tmp_path / "docs" / "git-command-table.yml").write_text(
+        YAML_TABLE + extra_rows, encoding="utf-8"
+    )
+
+    assert (
+        run_docs(
+            [
+                "--yaml-table",
+                "docs/git-command-table.yml",
+                "--search-git",
+                "git diff|Not supported",
+            ],
+            source,
+        )
+        == 0
+    )
+    output = capsys.readouterr().out
+    assert "Compare A" in output
+    assert "Fold a long description" in output
+
+    assert (
+        run_docs(["--yaml-table", "docs/git-command-table.yml", "--search-git", ".*"], source) == 0
+    )
+    output = capsys.readouterr().out
+    assert "Compare A" in output
+    assert "Fold a long description" in output
+    assert "Fetch" in output
+    assert "Status" in output
+
+
+def test_rtfd_reports_invalid_git_command_regex(tmp_path, capsys):
+    source = _source(tmp_path)
+
+    assert (
+        run_docs(["--yaml-table", "docs/git-command-table.yml", "--search-git", "["], source) == 2
+    )
+    assert "invalid Git-command regular expression" in capsys.readouterr().err
 
 
 def test_rtfd_rejects_yaml_asset_path_traversal(tmp_path, capsys):
     source = _source(tmp_path)
 
-    assert run_docs(["--yaml-table", "docs/../outside.yml"], source) == 2
+    assert (
+        run_docs(["--yaml-table", "docs/../outside.yml", "--search-git", "git diff"], source) == 2
+    )
     assert "canonical docs/ path" in capsys.readouterr().err
 
 

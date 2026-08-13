@@ -54,9 +54,12 @@ to `harmony`, and multi-workspace safety comes from `boundaries`.
 version. An agent can ask for a command, a language topic such as revsets or
 filesets, a broader `docs/` manual page, one relevant definition, or the full
 section. The included `rtfm` helper reads executable help, while `rtfd`
-navigates Markdown pages and referenced YAML tables, including field-aware
-search by Git command. Both keep ordinary answers compact without vendoring a
-second, possibly stale copy of jj's documentation.
+navigates Markdown pages and referenced YAML tables, including field-aware,
+case-sensitive regular-expression search of either the Git or Jujutsu command
+field. The complete Git command table is roughly 60 compact rows and can be
+loaded directly; when the complete inventory is unnecessary, search narrows it
+in one call. Both helpers avoid vendoring a second, possibly stale copy of jj's
+documentation.
 
 Command and language help comes from the local executable. Manual pages come
 from the package when detected, or from an explicit `JJ_SENSEI_DOCS_DIR` for

@@ -18,7 +18,8 @@ Resolve the helper from this loaded skill, not from the target repository:
 "<skill-dir>/scripts/rtfd" docs/git-experts --toc
 "<skill-dir>/scripts/rtfd" docs/operation-log --section evolog
 "<skill-dir>/scripts/rtfd" --yaml-table docs/git-command-table.yml
-"<skill-dir>/scripts/rtfd" --yaml-table docs/git-command-table.yml --search 'git rebase'
+"<skill-dir>/scripts/rtfd" --yaml-table docs/git-command-table.yml --search-git '(rebase|merge)'
+"<skill-dir>/scripts/rtfd" --yaml-table docs/git-command-table.yml --search-jj '(rebase|arrange)'
 ```
 
 Use a help keyword for a language or conceptual topic. The installed jj lists
@@ -35,9 +36,13 @@ Use `rtfd` and the explicit `docs/` prefix for broader manual pages. `--list`
 discovers their names, including nested pages such as
 `docs/guides/divergence`; `--toc`, `--section HEADING`, and `--full` select how
 much to read. Use `--yaml-table docs/PAGE.yml` when a page references an
-official YAML table asset, and add `--search 'git command'` to return only rows
-whose Git-command field matches. The namespace intentionally distinguishes
-embedded `bookmarks` help from the packaged `docs/bookmarks` page.
+official YAML table asset. The Git command table is only about 60 compact
+rows, so loading it whole is reasonable when the complete inventory is useful.
+If you will not need all roughly 60 rows, add `--search-git 'regex'` or
+`--search-jj 'regex'` to filter only that command field with a case-sensitive
+regular expression; combine several commands with regex alternation. The
+namespace intentionally distinguishes embedded `bookmarks` help from the
+packaged `docs/bookmarks` page.
 
 The helper first looks for docs shipped beside the resolved jj executable. Set
 `JJ_SENSEI_DOCS_DIR=/path/to/jj/docs` when a package uses an unusual layout. If

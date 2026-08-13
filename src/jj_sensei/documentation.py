@@ -46,10 +46,16 @@ def parser() -> argparse.ArgumentParser:
         metavar="DOCS/YAML",
         help="render an installed YAML table asset as Markdown",
     )
-    result.add_argument(
-        "--search",
-        metavar="GIT-COMMAND",
-        help="filter a YAML table by its Git command column",
+    searches = result.add_mutually_exclusive_group()
+    searches.add_argument(
+        "--search-git",
+        metavar="GIT-COMMAND-REGEX",
+        help="filter a YAML table by a case-sensitive regex over its Git command column",
+    )
+    searches.add_argument(
+        "--search-jj",
+        metavar="JJ-COMMAND-REGEX",
+        help="filter a YAML table by a case-sensitive regex over its Jujutsu command column",
     )
     return result
 
@@ -66,7 +72,14 @@ def run_docs(argv: list[str] | None, source: HelpSource) -> int:
             _require_yaml_table_alone(args)
             source_text = source.doc_asset(args.yaml_table, suffixes={".yaml", ".yml"})
             warn_about_docs_version(source, program="rtfd")
-            print(render_yaml_table(source_text, search=args.search), end="")
+            print(
+                render_yaml_table(
+                    source_text,
+                    search_git=args.search_git,
+                    search_jj=args.search_jj,
+                ),
+                end="",
+            )
             return 0
 
         if args.list:
@@ -80,8 +93,11 @@ def run_docs(argv: list[str] | None, source: HelpSource) -> int:
             parser().print_usage(sys.stderr)
             print("rtfd: supply a docs/ topic, --list, or --yaml-table", file=sys.stderr)
             return 2
-        if args.search is not None:
-            raise HelpError("--search requires --yaml-table; use --section for Markdown pages")
+        if args.search_git is not None or args.search_jj is not None:
+            raise HelpError(
+                "--search-git and --search-jj require --yaml-table; "
+                "use --section for Markdown pages"
+            )
         if sum((args.toc, args.section is not None, args.full)) > 1:
             raise HelpError("--toc, --section, and --full are mutually exclusive")
 
@@ -114,7 +130,7 @@ def _require_yaml_table_alone(args: argparse.Namespace) -> None:
 
 
 def _require_list_alone(args: argparse.Namespace) -> None:
-    if args.topic or args.toc or args.section or args.full or args.search:
+    if args.topic or args.toc or args.section or args.full or args.search_git or args.search_jj:
         raise HelpError("--list must be used by itself")
 
 
@@ -130,13 +146,31 @@ def render_toc(markdown: str) -> str:
     return "\n".join(f"{'  ' * (level - base)}- {title}" for level, title in headings) + "\n"
 
 
-def render_yaml_table(source: str, *, search: str | None = None) -> str:
+def render_yaml_table(
+    source: str,
+    *,
+    search_git: str | None = None,
+    search_jj: str | None = None,
+) -> str:
     rows = parse_yaml_table(source)
+    if search_git is not None and search_jj is not None:
+        raise HelpError("Git and Jujutsu command searches are mutually exclusive")
+    search = search_git if search_git is not None else search_jj
     if search is not None:
-        needle = search.casefold()
-        rows = [row for row in rows if needle in row.git_command.casefold()]
+        field = "Git" if search_git is not None else "Jujutsu"
+        if not search.strip():
+            raise HelpError(f"{field}-command regular expression cannot be empty")
+        try:
+            pattern = re.compile(search.strip())
+        except re.error as error:
+            raise HelpError(f"invalid {field}-command regular expression: {error}") from error
+        rows = [
+            row
+            for row in rows
+            if pattern.search(row.git_command if search_git is not None else row.jujutsu_command)
+        ]
         if not rows:
-            raise HelpError(f"YAML table has no Git command matching {search!r}")
+            raise HelpError(f"YAML table has no {field} command matching {search!r}")
     output = [
         "| Use case | Git command | Jujutsu command | Notes |",
         "|---|---|---|---|",
