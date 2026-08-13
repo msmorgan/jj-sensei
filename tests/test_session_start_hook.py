@@ -62,20 +62,38 @@ def test_agy_outside_jj_workspace_does_not_inject(tmp_path):
     assert json.loads(result.stdout) == {}
 
 
-def hook_manifest_command() -> str:
+def hook_manifest_commands() -> list[str]:
+    """Every distinct command the manifest runs, across all of its events."""
     manifest = json.loads((ROOT / "hooks" / "hooks.json").read_text())
     commands = [
-        hook["command"] for entry in manifest["hooks"]["SessionStart"] for hook in entry["hooks"]
+        hook["command"]
+        for entries in manifest["hooks"].values()
+        for entry in entries
+        for hook in entry["hooks"]
     ]
-    matches = [command for command in commands if command.endswith('/hooks/session_start.sh"')]
-    assert len(matches) == 1, commands
+    assert commands, manifest
+    return sorted(set(commands))
+
+
+def session_start_command() -> str:
+    matches = [
+        command
+        for command in hook_manifest_commands()
+        if command.endswith('/hooks/session_start.sh"')
+    ]
+    assert len(matches) == 1, matches
     return matches[0]
 
 
+@pytest.mark.parametrize(
+    "command", hook_manifest_commands(), ids=lambda c: c.rsplit("/", 1)[-1].rstrip('"')
+)
 @pytest.mark.parametrize("plugin_root", PLUGIN_ROOT_VARIABLES)
-def test_hook_manifest_command_resolves_for_every_host(tmp_path, plugin_root):
+def test_every_manifest_command_resolves_for_every_host(tmp_path, plugin_root, command):
     """Codex exports PLUGIN_ROOT and Claude exports CLAUDE_PLUGIN_ROOT. A command
-    naming only one of them silently expands to an absolute path under `/`."""
+    naming only one of them silently expands to an absolute path under `/`, and the
+    hook never runs. Every command in the manifest carries that risk, not just the
+    one whose output this module asserts on."""
     workspace = jj_workspace(tmp_path)
     environment = {
         name: value for name, value in os.environ.items() if name not in PLUGIN_ROOT_VARIABLES
@@ -83,11 +101,27 @@ def test_hook_manifest_command_resolves_for_every_host(tmp_path, plugin_root):
     environment[plugin_root] = str(ROOT)
 
     result = subprocess.run(
-        ["bash", "-c", hook_manifest_command()],
+        ["bash", "-c", command],
         input=json.dumps({"hook_event_name": "SessionStart", "cwd": str(workspace)}),
         capture_output=True,
         text=True,
         env=environment,
+    )
+
+    # An unresolved root exits non-zero from the interpreter, before the hook's own
+    # logic runs. What each hook then decides to emit is asserted elsewhere.
+    assert result.returncode == 0, result.stderr
+
+
+def test_session_start_manifest_command_injects_guidance(tmp_path):
+    workspace = jj_workspace(tmp_path)
+
+    result = subprocess.run(
+        ["bash", "-c", session_start_command()],
+        input=json.dumps({"hook_event_name": "SessionStart", "cwd": str(workspace)}),
+        capture_output=True,
+        text=True,
+        env={**os.environ, "CLAUDE_PLUGIN_ROOT": str(ROOT)},
     )
 
     assert result.returncode == 0, result.stderr
@@ -104,7 +138,7 @@ def test_hook_manifest_command_survives_a_plugin_root_containing_spaces(tmp_path
     workspace = jj_workspace(tmp_path)
 
     result = subprocess.run(
-        ["bash", "-c", hook_manifest_command()],
+        ["bash", "-c", session_start_command()],
         input=json.dumps({"hook_event_name": "SessionStart", "cwd": str(workspace)}),
         capture_output=True,
         text=True,
