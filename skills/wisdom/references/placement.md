@@ -38,7 +38,14 @@ jj --no-pager rebase -r CHANGE -A LOWER
 jj --no-pager rebase -r CHANGE -B UPPER
 ```
 
-Combine them to name both endpoints of a specific edge:
+Either flag alone already names a complete insertion. `-A LOWER` rebases the
+selection onto `LOWER` and rebases `LOWER`'s descendants onto the result, so
+the opposite endpoint is `LOWER`'s current children. `-B UPPER` rebases the
+selection onto `UPPER`'s parents and rebases `UPPER` and its descendants onto
+the result, so the opposite endpoint is `UPPER`'s current parents. Neither
+form needs the other to be well defined.
+
+Combine them only to name one specific existing edge:
 
 ```bash
 jj --no-pager rebase -r CHANGE -A LOWER -B UPPER
@@ -50,16 +57,31 @@ revisions.
 
 Prefer `-A` and `-B` for ordinary insertion and reordering. They express where
 the selection belongs in the surrounding history and move the affected
-descendants with that relationship. By contrast, `-d DESTINATION` (also
-spelled `-o DESTINATION`) makes the selection a direct child of `DESTINATION`
-without moving the destination's existing descendants. Use it when that
-parallel fork is intentional, or repeat it when intentionally creating a
-merge:
+descendants with that relationship. By contrast, `-o DESTINATION` (`--onto`,
+with `-d`/`--destination` as its alias) makes the selection a direct child of
+`DESTINATION` without moving the destination's existing descendants. Use it
+when that parallel fork is intentional, or repeat it when intentionally
+creating a merge:
 
 ```bash
 jj --no-pager rebase -r CHANGE -o FORK_POINT
 jj --no-pager rebase -r CHANGE -o LEFT_PARENT -o RIGHT_PARENT
 ```
+
+## The same placement model elsewhere
+
+`jj split`, `jj revert`, and `jj duplicate` take the same `-o`/`-A`/`-B`
+triple with the same meanings, so a placement decision transfers between them
+unchanged:
+
+```bash
+jj --no-pager revert -r LANDED -A TIP
+jj --no-pager duplicate -r CHANGE -A TIP
+```
+
+`jj revert` is stricter than the others: it *requires* one of the three and
+refuses to run without a placement, since there is no sensible default
+location for a reversal.
 
 ## Select revisions explicitly
 
