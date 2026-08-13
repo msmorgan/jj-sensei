@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -204,11 +205,12 @@ def test_sorted_merge_prepends_before_run_start(tmp_path):
     assert n_adds == 2
 
 
-def _run(*args):
+def _run(*args, env_overrides=None):
     return subprocess.run(
         [sys.executable, str(CONFLICTS), *args],
         capture_output=True,
         text=True,
+        env={**os.environ, **(env_overrides or {})},
     )
 
 
@@ -387,3 +389,52 @@ def test_auto_leaves_unsupported_marker_style(tmp_path):
     assert r.returncode == 0, r.stderr
     assert f.read_text() == GIT_STYLE
     assert "left (unsupported marker style)" in r.stdout
+
+
+# --- work-tree fidelity -----------------------------------------------------
+
+
+def _write_raw(path, text):
+    path.write_text(text, encoding="utf-8", newline="")
+    return path
+
+
+def test_auto_preserves_crlf_line_endings(tmp_path):
+    f = _write_raw(tmp_path / "imports.txt", QUALIFYING.replace("\n", "\r\n"))
+    r = _run("auto", str(f))
+    assert r.returncode == 0, r.stderr
+    assert f.read_bytes() == EXPECTED.replace("\n", "\r\n").encode()
+
+
+def test_accept_preserves_crlf_line_endings(tmp_path):
+    f = _write_raw(tmp_path / "imports.txt", QUALIFYING.replace("\n", "\r\n"))
+    r = _run("accept", str(f), "diff")
+    assert r.returncode == 0, r.stderr
+    assert f.read_bytes() == (
+        b"import aaa\r\nimport bbb\r\nimport bcc\r\nimport ddd\r\nimport eee\r\n"
+    )
+
+
+def test_resolution_does_not_reflow_a_form_feed(tmp_path):
+    # `str.splitlines` breaks on form feed; a page-separated source file must not
+    # gain line breaks just by passing through the resolver.
+    source = QUALIFYING.replace("import eee\n", "\x0cimport eee\n")
+    f = _write_raw(tmp_path / "imports.txt", source)
+    r = _run("auto", str(f))
+    assert r.returncode == 0, r.stderr
+    assert f.read_text(encoding="utf-8", newline="") == EXPECTED.replace(
+        "import eee\n", "\x0cimport eee\n"
+    )
+
+
+def test_non_utf8_locale_still_reads_utf8_content(tmp_path):
+    f = _write_raw(tmp_path / "imports.txt", QUALIFYING.replace("import eee", "import éee"))
+    # PYTHONUTF8=0 keeps the C locale from silently enabling UTF-8 mode, so a
+    # read without an explicit encoding really would fail here.
+    r = _run(
+        "auto",
+        str(f),
+        env_overrides={"LC_ALL": "C", "LANG": "C", "PYTHONUTF8": "0", "PYTHONCOERCECLOCALE": "0"},
+    )
+    assert r.returncode == 0, r.stderr
+    assert f.read_text(encoding="utf-8") == EXPECTED.replace("import eee", "import éee")

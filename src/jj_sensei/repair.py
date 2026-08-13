@@ -60,7 +60,7 @@ class StateStore:
 
     def load(self) -> ResolutionState | None:
         try:
-            data = json.loads(self.path.read_text())
+            data = json.loads(self.path.read_text(encoding="utf-8"))
         except FileNotFoundError:
             return None
         state = ResolutionState(**data)
@@ -75,7 +75,7 @@ class StateStore:
         fd, temporary = tempfile.mkstemp(prefix="repair.", suffix=".tmp", dir=self.directory)
         temporary_path = Path(temporary)
         try:
-            with os.fdopen(fd, "w") as stream:
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
                 json.dump(asdict(state), stream, indent=2, sort_keys=True)
                 stream.write("\n")
                 stream.flush()
@@ -515,13 +515,14 @@ def _print_marker_locations(root: Path, files: list[str]) -> None:
     for filename in files:
         path = root / filename
         try:
-            lines = path.read_text().splitlines()
+            lines = conflicts._split_lines(conflicts._read_source(path))
         except (OSError, UnicodeError) as error:
             print(f"  {path}: could not read markers: {error}", file=sys.stderr)
             continue
         for number, line in enumerate(lines, 1):
-            if _MARKER.match(line):
-                print(f"  {path}:{number}:{line}", file=sys.stderr)
+            text = conflicts._split_line(line)[0]
+            if _MARKER.match(text):
+                print(f"  {path}:{number}:{text}", file=sys.stderr)
 
 
 def _print_conflict_hunks(root: Path, files: list[str]) -> None:

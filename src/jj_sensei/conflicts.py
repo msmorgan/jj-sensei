@@ -28,10 +28,13 @@ from collections import Counter
 from difflib import SequenceMatcher
 from pathlib import Path
 
+from . import use_utf8_output
+
 JJ = "jj"
 
 _START = re.compile(r"^(<{7,}) conflict (\d+) of (\d+)$")
 _GENERIC_START = re.compile(r"^<{7,}", re.MULTILINE)
+_LINE = re.compile(r"[^\r\n]*(?:\r\n|\r|\n)|[^\r\n]+")
 
 
 def _project_root():
@@ -49,18 +52,53 @@ PROJECT_ROOT = _project_root()
 
 
 # ---------------------------------------------------------------------------
+# Work-tree IO
+# ---------------------------------------------------------------------------
+
+
+def _read_source(path):
+    """Read a work-tree file byte-faithfully.
+
+    `newline=""` disables universal-newline translation, so a CRLF file stays
+    CRLF instead of being silently rewritten to LF by the resolution round-trip.
+    """
+    return path.read_text(encoding="utf-8", newline="")
+
+
+def _write_source(path, text):
+    return path.write_text(text, encoding="utf-8", newline="")
+
+
+def _split_line(line):
+    """Split a raw line into its text and its exact terminator."""
+    for terminator in ("\r\n", "\n"):
+        if line.endswith(terminator):
+            return line[: -len(terminator)], terminator
+    return line, ""
+
+
+def _split_lines(text):
+    """Split into terminator-keeping lines, breaking only on CR, LF, and CRLF.
+
+    `str.splitlines` also breaks on form feed and the Unicode separators, which
+    would silently reflow source files that use them.
+    """
+    return _LINE.findall(text)
+
+
+# ---------------------------------------------------------------------------
 # Parser
 # ---------------------------------------------------------------------------
 
 
 def parse_file(path):
     """Return (hunks, lines) — hunks is a list of dicts, lines is the raw file."""
-    text = path.read_text()
-    lines = text.splitlines(keepends=True)
+    text = _read_source(path)
+    lines = _split_lines(text)
     hunks = []
     i = 0
     while i < len(lines):
-        m = _START.match(lines[i].rstrip("\n"))
+        m = _START.match(_split_line(lines[i])[0])
         if m:
             n = len(m.group(1))
             end_pfx = ">" * n
@@ -93,7 +131,7 @@ def parse_file(path):
 
 def _has_unparsed_conflict(path, hunks):
     """Return true when markers exist but are not default diff+snapshot hunks."""
-    return not hunks and bool(_GENERIC_START.search(path.read_text()))
+    return not hunks and bool(_GENERIC_START.search(_read_source(path)))
 
 
 def _parse_sides(inner, n):
@@ -101,7 +139,7 @@ def _parse_sides(inner, n):
     sections, cur_kind, cur = [], None, []
 
     for line in inner:
-        s = line.rstrip("\n")
+        s = _split_line(line)[0]
         if s.startswith(diff_m):
             if cur_kind:
                 sections.append((cur_kind, cur))
@@ -132,15 +170,17 @@ def _parse_sides(inner, n):
         if kind == "diff":
             result["diff_header"] = sec[0]
             for line in sec[1:]:
-                s = line.rstrip("\n")
+                # Rebuild each side with the terminator the file actually used,
+                # so a CRLF work tree survives the round-trip.
+                s, terminator = _split_line(line)
                 if s.startswith(" "):
-                    result["diff_base"].append(s[1:] + "\n")
-                    result["diff_side"].append(s[1:] + "\n")
+                    result["diff_base"].append(s[1:] + terminator)
+                    result["diff_side"].append(s[1:] + terminator)
                 elif s.startswith("-"):
                     has_removal = True
-                    result["diff_base"].append(s[1:] + "\n")
+                    result["diff_base"].append(s[1:] + terminator)
                 elif s.startswith("+"):
-                    result["diff_side"].append(s[1:] + "\n")
+                    result["diff_side"].append(s[1:] + terminator)
         elif kind == "snapshot":
             result["snap_header"] = sec[0]
             result["snapshot"] = list(sec[1:])
@@ -461,7 +501,7 @@ def cmd_accept(args):
         resolved += 1
 
     if resolved:
-        path.write_text("".join(lines))
+        _write_source(path, "".join(lines))
     left = f", {skipped} unsupported hunk(s) left" if skipped else ""
     print(f"Resolved {resolved} hunk(s) in {filepath} (accepted {side} side){left}.")
     if skipped:
@@ -500,7 +540,7 @@ def _auto_resolve_file(path, filepath, dry):
                 # Don't rewrite; mark resolved so we don't loop on it forever.
                 declined.add("".join(h["raw"]))
             else:
-                path.write_text("".join(new_lines))
+                _write_source(path, "".join(new_lines))
                 progressed = True
                 break  # re-parse the rewritten file
         if not progressed:
@@ -526,6 +566,7 @@ def cmd_auto(args):
 # ---------------------------------------------------------------------------
 # Command-line interface
 # ---------------------------------------------------------------------------
+
 
 def parser():
     result = argparse.ArgumentParser(
@@ -588,6 +629,7 @@ def parser():
 
 
 def main(argv=None):
+    use_utf8_output()
     if argv is None:
         argv = sys.argv[1:]
     command_parser = parser()

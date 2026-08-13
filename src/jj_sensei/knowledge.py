@@ -12,6 +12,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import use_utf8_output
+
 _COMMAND_HEADING = re.compile(r"^## `jj(?: (?P<path>[^`]+))?`$")
 _HEADING = re.compile(r"^(?P<marks>#{1,6})\s+(?P<title>.+?)\s*$")
 _LEADING_DEFINITION = re.compile(r"^\* `(?P<term>[^`]+)`")
@@ -114,6 +116,7 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    use_utf8_output()
     return run_help(argv, HelpSource())
 
 
@@ -507,7 +510,7 @@ def _keyword_definitions(text: str) -> list[str]:
 
 
 def check_manifest(source: HelpSource, path: Path) -> int:
-    expected = json.loads(path.read_text())
+    expected = json.loads(path.read_text(encoding="utf-8"))
     actual_manifest = build_manifest(source)
     actual = manifest_lock(actual_manifest) if "lock" in expected else actual_manifest
     differences = manifest_differences(expected, actual)

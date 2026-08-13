@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import conflicts, knowledge
+from . import conflicts, knowledge, use_utf8_output
 from .repair import run_converge, run_repair, run_resolve
 from .setup import run_setup
 
@@ -57,6 +57,7 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    use_utf8_output()
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     if raw_argv[:1] == ["rtfm"]:
         return knowledge.main(raw_argv[1:])
