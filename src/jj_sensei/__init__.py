@@ -2,8 +2,6 @@
 
 import sys
 
-__version__ = "0.1.0"
-
 
 def use_utf8_output() -> None:
     """Emit UTF-8 regardless of the caller's locale.
