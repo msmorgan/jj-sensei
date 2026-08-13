@@ -4,7 +4,15 @@ import subprocess
 import uuid
 
 from jj_sensei.jj import Jj, JjError
-from jj_sensei.repair import LockTimeout, ResolutionState, StateStore, WorkspaceLock, run_repair
+from jj_sensei.repair import (
+    HumanRequired,
+    LockTimeout,
+    ResolutionState,
+    StateStore,
+    WorkspaceLock,
+    converge,
+    run_repair,
+)
 from jj_sensei.setup import run_setup
 
 
@@ -178,6 +186,53 @@ def test_repair_converges_stale_dirty_workspace_without_losing_edit(jj_repo):
     assert run_repair(feature) == 0
     assert (feature / "precious.txt").read_text() == "keep me\n"
     assert Jj(feature).commits("divergent()") == []
+
+
+def _make_equivalent_divergence(jj_repo):
+    assert run_setup(jj_repo.root) == 0
+    feature = jj_repo.add_workspace("feature")
+
+    jj_repo.write(jj_repo.root, "trunk.txt", "moved\n")
+    jj_repo.commit(jj_repo.root, "move trunk")
+    jj_repo.run(jj_repo.root, "rebase", "-r", "feature@", "-d", "default@-")
+    jj_repo.write(feature, "precious.txt", "keep me\n")
+    jj_repo.run(feature, "workspace", "update-stale")
+
+    jj = Jj(feature)
+    current = jj.one_commit("@", snapshot=True)
+    candidates = jj.commits(f"change_id({current.change_id})")
+    assert len(candidates) == 2
+    keeper = next(candidate for candidate in candidates if not candidate.empty)
+    loser = next(candidate for candidate in candidates if candidate.empty)
+    return feature, keeper, loser
+
+
+def test_converge_allows_a_bookmark_on_the_keeper(jj_repo):
+    feature, keeper, _loser = _make_equivalent_divergence(jj_repo)
+    jj_repo.run(feature, "bookmark", "create", "kept", "-r", keeper.commit_id)
+
+    assert converge(Jj(feature))
+
+    jj = Jj(feature)
+    assert jj.commits("divergent()") == []
+    assert jj.one_commit("kept").commit_id == jj.one_commit("@").commit_id
+
+
+def test_converge_pauses_before_abandoning_a_bookmarked_loser(jj_repo):
+    feature, _keeper, loser = _make_equivalent_divergence(jj_repo)
+    jj_repo.run(feature, "bookmark", "create", "needs-decision", "-r", loser.commit_id)
+
+    try:
+        converge(Jj(feature))
+    except HumanRequired as error:
+        assert "would affect bookmarks" in str(error)
+        assert "user, task, or repository workflow" in str(error)
+    else:
+        raise AssertionError("convergence abandoned a bookmarked candidate")
+
+    jj = Jj(feature)
+    assert len(jj.commits("divergent()")) == 2
+    assert jj.one_commit("needs-decision").commit_id == loser.commit_id
 
 
 def test_repair_refuses_different_nonempty_successors(jj_repo, capsys):

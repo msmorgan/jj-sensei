@@ -58,8 +58,11 @@ Use these only when the narrower diagnosis is already certain:
 ```
 
 Convergence keeps the sole nonempty successor, or any one of byte-identical
-successors. It refuses genuinely different nonempty trees, bookmarked
-candidates, and candidates owned by another workspace.
+successors. A bookmark on the chosen keeper is left intact. If abandoning a
+losing candidate would affect a bookmark, convergence pauses rather than
+assuming whether that bookmark should move, remain, or be deleted. It also
+refuses genuinely different nonempty trees and candidates owned by another
+workspace.
 
 ## Inspecting and resolving marker content
 

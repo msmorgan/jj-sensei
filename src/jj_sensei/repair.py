@@ -153,7 +153,7 @@ def converge(jj: Jj, *, announce: bool = True) -> bool:
             print("converge: @ is not divergent — nothing to do.")
         return False
 
-    _refuse_owned_candidates(jj, candidates, current)
+    _refuse_foreign_candidates(jj, candidates)
     nonempty = [candidate for candidate in candidates if not candidate.empty]
     if not nonempty:
         keep = current
@@ -170,13 +170,19 @@ def converge(jj: Jj, *, announce: bool = True) -> bool:
                     "inspect the candidates and choose the keeper manually"
                 )
 
+    initial_drop = [candidate for candidate in candidates if candidate.commit_id != keep.commit_id]
+    _refuse_bookmarked_candidates(jj, initial_drop)
+
     if current.commit_id != keep.commit_id:
         jj.run("edit", keep.commit_id)
 
     survivors = jj.commits(f"change_id({current.change_id})")
     drop = [candidate for candidate in survivors if candidate.commit_id != keep.commit_id]
     if drop:
-        _refuse_owned_candidates(jj, [keep, *drop], keep)
+        # Recheck immediately before abandon in case another process changed
+        # bookmark or workspace ownership while the working copy was edited.
+        _refuse_bookmarked_candidates(jj, drop)
+        _refuse_foreign_candidates(jj, [keep, *drop])
         jj.run("abandon", *[candidate.commit_id for candidate in drop])
 
     if announce:
@@ -185,15 +191,20 @@ def converge(jj: Jj, *, announce: bool = True) -> bool:
     return True
 
 
-def _refuse_owned_candidates(jj: Jj, candidates: list[Commit], keep: Commit) -> None:
+def _refuse_bookmarked_candidates(jj: Jj, candidates: list[Commit]) -> None:
     candidate_ids = {candidate.commit_id for candidate in candidates}
     referenced = jj.commits(f"({union(candidate_ids)}) & bookmarks()")
     if referenced:
         ids = ", ".join(commit.commit_id[:12] for commit in referenced)
         raise HumanRequired(
-            f"converge: candidate(s) {ids} have bookmarks; bookmark ownership is user-only"
+            f"converge: abandoning candidate(s) {ids} would affect bookmarks; whether those "
+            "bookmarks should move, remain, or be deleted must come from the user, task, or "
+            "repository workflow"
         )
 
+
+def _refuse_foreign_candidates(jj: Jj, candidates: list[Commit]) -> None:
+    candidate_ids = {candidate.commit_id for candidate in candidates}
     current_name = jj.current_workspace().name
     foreign = [
         workspace
