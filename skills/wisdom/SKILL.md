@@ -1,6 +1,6 @@
 ---
 name: wisdom
-description: Recognize useful Jujutsu history-shaping idioms and uncommon scenarios, then route to focused guidance or guarded techniques. Use when splitting mixed work, placing or reordering changes with split/rebase, naming an exact graph edge, or constructing an intermediate content state that ordinary diff selection cannot express.
+description: Recognize useful Jujutsu history-shaping idioms and uncommon scenarios, then route to focused guidance or guarded techniques. Use when splitting mixed work, selecting precise revisions with revsets, placing or reordering changes with split/rebase, naming an exact graph edge, or constructing an intermediate content state that ordinary diff selection cannot express.
 ---
 
 # Apply Jujutsu Wisdom
@@ -14,7 +14,10 @@ paths from this loaded `SKILL.md`, not from the repository being edited.
 - **“I want these selected files to become the later change, not the earlier
   one.”** Read [Place changes deliberately](references/placement.md).
 - **“I know what this change should be after or before—or exactly which graph
-  edge it belongs in.”** Read [Place changes deliberately](references/placement.md).
+  edge it belongs in—without accidentally creating a fork.”** Read
+  [Place changes deliberately](references/placement.md).
+- **“I need to move a precise set of revisions or a whole subtree.”** Read
+  [Place changes deliberately](references/placement.md).
 
 If no listed scenario matches, do not improvise a multi-step rewrite from this
 skill. Use `knowledge` to read the version-matched jj manual, then choose normal

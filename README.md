@@ -87,7 +87,10 @@ general tutorial or a long sequence of commands.
 It also records small, high-leverage idioms that are easy to miss in the full
 manual: choosing whether a selected fileset becomes the earlier or later half
 of a split, expressing after/before placement as an idempotent invariant, and
-using `-A` with `-B` to name one exact graph edge.
+using `-A` with `-B` to name one exact graph edge. It prefers explicit `-r`
+revsets—including `ROOT::` for a subtree—and previews nontrivial selections
+before mutation. For ordinary insertion and reordering it prefers `-A`/`-B`;
+`-o` is reserved for intentional forks and merges.
 
 The first technique is interpolation: turning one mixed change into two when
 the desired intermediate content cannot be selected from the existing diff—for

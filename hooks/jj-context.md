@@ -12,14 +12,14 @@
 | `git restore --source=HEAD -- src/parser.rs` | `jj --no-pager restore src/parser.rs` | Restores from the merged parent tree; no index. |
 | `git switch -c fix-parser main` | `jj --no-pager new main -m "Fix parser"` | Creates and edits a child; creates no bookmark. |
 | `git switch fix-parser` | `jj --no-pager edit qpvuntsm` | Edits a change, not a checked-out branch; descendants rebase. |
-| `git rebase main` | `jj --no-pager rebase -s qpvuntsm -o main` | Moves that change and descendants; conflicts stay recorded. |
+| `git rebase main` | `jj --no-pager rebase -r 'main..@' -A main` | Preview the revset first; the exact selection depends on the intended stack. |
 | `git fetch origin` | `jj --no-pager git fetch --remote origin` | Updates remote bookmarks; does not perform an active-branch pull. |
 
 **Bookmarks are named pointers to revisions.** They remain attached when the revision they point to is rewritten, but they do not advance when a new child is created. There is no active or checked-out bookmark. Do not infer that a bookmark should move merely because work began from it. Create, move, or delete bookmarks only when the user, task, or repository workflow calls for it.
 
 **Empty, undescribed working-copy changes are normal.** These changes are usually auto-pruned when you switch away. Ignore them; to tidy only mutable anonymous heads that belong to no workspace: `jj --no-pager abandon -r '(empty() & description(exact:"") & mutable() & visible_heads()) ~ working_copies() ~ bookmarks()'`.
 
-**Rebasing is surgical, predictable, and does not pause at conflicts.** Rebasing never pauses for merge conflicts; conflicts are recorded directly in the resulting commits. Use `-d <dest>` (or `-o <dest>`) to relocate the fork point of revisions specified by `-r <revset>` (or `-s <root>` for a full subtree). Use `-B <target>` (`--before`) and/or `-A <target>` (`--after`) to insert a change before or after a target revision (this is a no-op if the change is already positioned appropriately relative to the target). When used together, `-A` and `-B` can locate a specific edge for inserting revisions.
+**Rebasing is surgical, predictable, and does not pause at conflicts.** Rebasing never pauses for merge conflicts; conflicts are recorded directly in the resulting commits. Prefer `-r <revset>` to select the exact revisions, and preview a nontrivial revset with `jj --no-pager log -r '<revset>' -T builtin_log_oneline`. For ordinary insertion or reordering, use `-B <target>` (`--before`) and/or `-A <target>` (`--after`); these are no-ops when the requested ancestry relationship is already satisfied, and together they can identify one exact edge. Use `-d <dest>` (also spelled `-o <dest>`) only when the selection should become a direct child of the destination while its existing descendants remain in place—an intentional fork—or repeat it to create a merge. `-s <root>` has distinct source semantics and is not merely shorthand for an explicit descendant revset.
 
 **Git interop and colocation.** In a colocated repository, `.jj/` and `.git/` share the same working copy, and `jj` automatically synchronizes commits and refs with Git. Bookmarks correspond directly to local and remote Git branches (e.g. `main@origin`). Git can represent empty commits, but `jj git push` rejects empty descriptions by default. Describe changes before pushing; abandon temporary empty WIP litter with `jj --no-pager abandon`.
 
@@ -45,4 +45,4 @@ The ancestors of any nonempty `condition` include `root()`, whose descendants ar
 - **Never retarget other workspaces with `-R`:** Do not pass `-R <path>` or `--repository <path>` to target another workspace's directory. Always ensure you are in the correct directory for the workspace you are operating in.
 - **Never run mutating `git` commands:** In a colocated repository, run all version control operations through `jj`, never `git`.
 
-**If an operation you need is not explicitly covered above, or its correct form is uncertain, load the `knowledge` skill and query the installed jj documentation before acting. Do not infer jj behavior from Git.**
+**For splitting, reordering, or placing revisions—especially when choosing among `-A`, `-B`, `-o`, `-r`, and `-s`—load the `wisdom` skill and follow its focused placement guidance. If another operation is not explicitly covered above, or its correct form is uncertain, load `knowledge` and query the installed jj documentation before acting. Do not infer jj behavior from Git.**
