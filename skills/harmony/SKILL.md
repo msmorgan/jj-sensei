@@ -15,6 +15,22 @@ being repaired. If command or marker semantics are uncertain, load `knowledge`
 and query `resolve --full` or `config --search "Conflict marker style"` before
 choosing conflict content.
 
+Before running any fix, state the diagnosed root cause in one plain sentence —
+which revision is stale, divergent, or conflicted, and what produced that
+state. A repair chosen before the diagnosis is named is a guess.
+
+## Choose the narrow fix or the repair walk
+
+One conflict, already fully diagnosed, whose intended content is known: edit
+the marker block or run `conflicts accept`, and stop there. Several conflicts,
+a stale workspace, or divergence in play: run `repair`, which orders the work
+and refuses the parts that need judgment.
+
+If the conflicted revision is already `@`, there is no choreography to
+perform. The conflict is materialized in the files on disk, so resolving it is
+editing those files — or running `conflicts accept` — and letting the next jj
+command snapshot the result. No `edit`, no `new`, no `squash` is involved.
+
 ## Fast path
 
 Run the one-stop repair helper from the affected workspace:
@@ -77,6 +93,11 @@ The `conflicts` helper supports jj's default `diff+snapshot` marker style:
 ```
 
 Resolve semantically complex conflicts by editing the complete marker block.
+Read [Read jj conflict markers](references/markers.md) before hand-editing one:
+it gives the section grammar, lengthened markers, the `(no terminating
+newline)` annotation, conflicts with more than two sides, and the alternative
+marker styles.
+
 Use a mechanical strategy only after its result is clearly understood:
 
 ```bash
