@@ -32,6 +32,13 @@ the introduction, essential grammar where applicable, and a section outline.
 Use `--search TERM` to extract matching official definitions or sections and
 `--full` only when the complete topic is needed.
 
+Route links from executable help back through the installed manual. For a link
+under `https://docs.jj-vcs.dev/latest/PAGE`, strip that prefix and any trailing
+slash, then run `rtfd docs/PAGE`; for example, links from `rtfm git --full` map
+to `rtfd docs/git-comparison` and `rtfd docs/git-command-table`. If the
+installed manual has no matching page, report that it is unavailable; do not
+fetch documentation for another jj version from the web.
+
 Use `rtfd` and the explicit `docs/` prefix for broader manual pages. `--list`
 discovers their names, including nested pages such as
 `docs/guides/divergence`; `--toc`, `--section HEADING`, and `--full` select how
