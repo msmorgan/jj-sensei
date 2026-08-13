@@ -1,0 +1,4 @@
+interface:
+  display_name: "Knowledge"
+  short_description: "Read installed Jujutsu documentation"
+  default_prompt: "Use $knowledge to look up authoritative command or language semantics from the installed Jujutsu version."

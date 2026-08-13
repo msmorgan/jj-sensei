@@ -1,0 +1,4 @@
+interface:
+  display_name: "Boundaries"
+  short_description: "Install and audit multi-workspace immutability"
+  default_prompt: "Use $boundaries to configure safe Jujutsu workspace isolation."

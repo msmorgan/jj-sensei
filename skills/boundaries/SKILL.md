@@ -1,0 +1,47 @@
+---
+name: boundaries
+description: Install or audit jj-sensei's repository-level immutable_heads configuration for safe multi-workspace isolation. Use when asked to set up, initialize, upgrade, verify, or troubleshoot jj-sensei workspace protection.
+---
+
+# Set Up jj Workspace Isolation
+
+Run this skill from the repository's `default` workspace. Resolve the helper
+path from this loaded `SKILL.md`, not from the target repository:
+
+```bash
+"<skill-dir>/scripts/setup-immutability"
+```
+
+The helper installs four readable repository revset aliases:
+
+```toml
+[revset-aliases]
+"other_workspaces()" = "working_copies() ~ @"
+"not_default()" = "@ ~ default@"
+"only_if(condition, revisions)" = "revisions & descendants(ancestors(condition))"
+"immutable_heads()" = "builtin_immutable_heads() | only_if(not_default(), other_workspaces())"
+```
+
+`only_if` exploits the fact that the ancestors of any nonempty revset include
+`root()`, whose descendants are `all()`. It therefore returns `revisions` when
+`condition` is nonempty and `none()` otherwise. `not_default()` is nonempty
+only outside the `default` workspace.
+
+The helper verifies that the custom term collapses in `default`, then audits
+active workspaces for shared feature-only ancestry. Treat an overlap report as
+a safe stop: the guard is working, but later rewrites can be unexpectedly
+blocked. Never bypass the guard. Ask the user how the live stacks should be
+restructured.
+
+To audit without changing configuration:
+
+```bash
+"<skill-dir>/scripts/setup-immutability" --check
+```
+
+Keep active non-default workspaces independent. Do not create a workspace on
+another live non-default workspace's `@`, or on mutable feature-only ancestry
+shared with it. Basing independent work on default-owned history avoids the
+overlap. If one workspace head becomes an ancestor of another, the ancestor
+workspace's own `@` becomes immutable through ancestor closure even though it
+is not itself returned by `immutable_heads()`.

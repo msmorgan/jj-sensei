@@ -1,0 +1,225 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from jj_sensei import cli
+from jj_sensei.knowledge import (
+    build_manifest,
+    compact_keyword,
+    extract_relevant,
+    manifest_differences,
+    manifest_lock,
+    parse_command_sections,
+    run_help,
+)
+
+HELP_HELP = """\
+Usage: jj help [OPTIONS] [COMMAND]...
+
+          Possible values:
+          - filesets: A language for selecting files
+          - revsets: A language for selecting revisions
+"""
+
+MARKDOWN_HELP = """\
+# Command-Line Help for `jj`
+
+## `jj`
+
+**Usage:** `jj [OPTIONS] [COMMAND]`
+
+###### **Subcommands:**
+
+* `log` — Show revision history
+
+###### **Options:**
+
+* `--no-pager` — Disable the pager
+
+## `jj log`
+
+**Usage:** `jj log [OPTIONS]`
+
+###### **Options:**
+
+* `-r`, `--revisions <REVSETS>` — Which revisions to show
+"""
+
+REVSETS = """\
+# Revsets
+
+Select revisions.
+
+## Symbols
+
+`@` is the working copy.
+
+## Operators
+
+* `x | y`: Union.
+
+??? examples
+
+    Lots of examples.
+
+## Functions
+
+* `ancestors(x, [depth])`: Return ancestors of x.
+
+* `descendants(x, [depth])`: Return descendants of x.
+
+## Examples
+
+An example.
+"""
+
+FILESETS = """\
+# Filesets
+
+Select files.
+
+## Operators
+
+* `x | y`: Union.
+"""
+
+
+class FakeSource:
+    def __init__(self, *, malformed_keyword: bool = False):
+        self.malformed_keyword = malformed_keyword
+        self.command_calls: list[tuple[tuple[str, ...], bool]] = []
+
+    def version(self):
+        return "jj 9.9.9"
+
+    def help_help(self):
+        return HELP_HELP
+
+    def keyword(self, topic):
+        if self.malformed_keyword:
+            return "unstructured official output\n"
+        return {"revsets": REVSETS, "filesets": FILESETS}[topic]
+
+    def command(self, path, *, full):
+        self.command_calls.append((tuple(path), full))
+        return f"{'long' if full else 'short'} help for {' '.join(path)}\n"
+
+    def markdown_help(self):
+        return MARKDOWN_HELP
+
+
+def test_command_sections_capture_canonical_paths():
+    assert list(parse_command_sections(MARKDOWN_HELP)) == ["", "log"]
+
+
+def test_compact_language_help_keeps_grammar_but_not_function_catalog():
+    compact = compact_keyword("revsets", REVSETS)
+    assert compact is not None
+    assert "## Operators" in compact
+    assert "Lots of examples" not in compact
+    assert "Return ancestors" not in compact
+    assert "- Functions" in compact
+
+
+def test_search_prefers_matching_official_definition():
+    selected = extract_relevant(REVSETS, "ancestors")
+    assert selected == "* `ancestors(x, [depth])`: Return ancestors of x.\n"
+
+
+def test_full_keyword_is_returned_verbatim(capsys):
+    source = FakeSource()
+    assert run_help(["revsets", "--full"], source) == 0
+    assert capsys.readouterr().out == REVSETS
+
+
+def test_malformed_compact_help_falls_back_to_full(capsys):
+    source = FakeSource(malformed_keyword=True)
+    assert run_help(["revsets"], source) == 0
+    captured = capsys.readouterr()
+    assert captured.out == "unstructured official output\n"
+    assert "showing full topic" in captured.err
+
+
+def test_command_defaults_short_and_full_is_explicit(capsys):
+    source = FakeSource()
+    assert run_help(["log"], source) == 0
+    assert run_help(["log", "--full"], source) == 0
+    assert source.command_calls == [(("log",), False), (("log",), True)]
+    assert capsys.readouterr().out == "short help for log\nlong help for log\n"
+
+
+def test_list_discovers_topics_without_hard_coding(capsys):
+    assert run_help(["--list"], FakeSource()) == 0
+    output = capsys.readouterr().out
+    assert "filesets" in output
+    assert "jj log" in output
+
+
+def test_manifest_lock_cli_is_prose_free(capsys):
+    assert run_help(["--manifest-lock"], FakeSource()) == 0
+    lock = json.loads(capsys.readouterr().out)
+    assert lock["jj_version"] == "jj 9.9.9"
+    assert set(lock["commands"]) == {"jj", "log"}
+    assert all(value.startswith("sha256:") for value in lock["keywords"].values())
+
+
+def test_manifest_modes_are_mutually_exclusive(capsys):
+    assert run_help(["--manifest", "--list"], FakeSource()) == 2
+    assert "must be used by itself" in capsys.readouterr().err
+
+
+def test_package_cli_forwards_knowledge_options(monkeypatch):
+    received = None
+
+    def fake_main(args):
+        nonlocal received
+        received = args
+        return 17
+
+    monkeypatch.setattr(cli.knowledge, "main", fake_main)
+    assert cli.main(["knowledge", "--list"]) == 17
+    assert received == ["--list"]
+
+
+def test_manifest_records_commands_options_and_language_definitions():
+    manifest = build_manifest(FakeSource())
+    assert manifest["commands"]["log"]["options"] == ["--revisions", "-r"]
+    assert manifest["commands"]["jj"]["subcommands"] == ["log"]
+    assert manifest["keywords"]["revsets"]["definitions"] == [
+        "ancestors(x, [depth])",
+        "descendants(x, [depth])",
+        "x | y",
+    ]
+
+
+def test_manifest_lock_detects_structural_drift():
+    original = {"schema": 1, "jj_version": "jj 1", "commands": {}, "keywords": {}}
+    changed = {"schema": 1, "jj_version": "jj 1", "commands": {"new": {}}, "keywords": {}}
+    assert manifest_lock(original)["commands"] != manifest_lock(changed)["commands"]
+    assert manifest_differences(original, changed) == ["added commands: new"]
+    assert manifest_differences(manifest_lock(original), manifest_lock(changed)) == [
+        "added commands: new"
+    ]
+
+    before = {**original, "commands": {"rebase": {"options": ["--onto"]}}}
+    after = {
+        **original,
+        "commands": {"rebase": {"options": ["--insert-after", "--onto"]}},
+    }
+    assert manifest_differences(manifest_lock(before), manifest_lock(after)) == [
+        "changed command: rebase"
+    ]
+
+
+def test_installed_jj_help_contract_has_not_drifted():
+    from jj_sensei.knowledge import HelpSource
+
+    expected = json.loads(
+        (Path(__file__).parent / "fixtures" / "knowledge-contract.json").read_text()
+    )
+    actual = manifest_lock(build_manifest(HelpSource()))
+    assert actual == expected, (
+        "The installed jj help contract changed. Review command/option/language changes, "
+        "then regenerate the structural fingerprint deliberately."
+    )

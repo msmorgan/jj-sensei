@@ -1,0 +1,4 @@
+interface:
+  display_name: "Harmony"
+  short_description: "Harmonize stale workspace state, divergent successors, and conflicts"
+  default_prompt: "Use $harmony to harmonize stale workspace state, divergent successors, and conflicts safely."

@@ -1,0 +1,29 @@
+{
+  "name": "jj-sensei",
+  "version": "0.1.0",
+  "description": "Jujutsu startup fluency, installed help extraction, workspace isolation, and resumable repair tooling",
+  "author": {
+    "name": "Michael Morgan",
+    "email": "self@msmorgan.dev",
+    "url": "https://github.com/msmorgan"
+  },
+  "homepage": "https://github.com/msmorgan/jj-sensei",
+  "repository": "https://github.com/msmorgan/jj-sensei",
+  "keywords": [
+    "jujutsu",
+    "jj",
+    "version-control"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "jj-sensei",
+    "shortDescription": "Teach your agents Jujutsu.",
+    "longDescription": "Use Jujutsu safely with eager operational guidance, version-matched help from the installed binary, multi-workspace isolation, and resumable conflict and divergence repair.",
+    "developerName": "Michael Morgan",
+    "category": "Developer Tools",
+    "capabilities": [],
+    "defaultPrompt": [
+      "Help me use Jujutsu safely in this repository."
+    ]
+  }
+}
