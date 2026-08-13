@@ -7,6 +7,7 @@ import pytest
 from jj_sensei import interpolate
 from jj_sensei.interpolate import StateStore, run_abort, run_begin, run_finish
 from jj_sensei.jj import Jj, JjError
+from jj_sensei.setup import run_setup
 
 
 def _make_target(jj_repo):
@@ -54,6 +55,45 @@ def test_interpolate_constructs_a_generated_intermediate_state(jj_repo):
 
     jj = Jj(jj_repo.root)
     assert StateStore(jj_repo.root).load() is None
+    assert jj.one_commit("@").change_id == target.change_id
+    base = jj.one_commit("@-")
+    assert base.description == "add alpha"
+    assert jj.run("file", "show", "-r", base.change_id, "catalog.json").stdout == (
+        '{"items":["alpha"]}\n'
+    )
+    assert jj.run("file", "show", "-r", target.change_id, "catalog.json").stdout == (
+        '{"items":["alpha","beta"]}\n'
+    )
+
+
+def test_interpolate_runs_from_an_isolated_feature_workspace(jj_repo):
+    assert run_setup(jj_repo.root) == 0
+    feature = jj_repo.add_workspace("feature")
+    jj_repo.write(feature, "catalog.json", '{"items":["alpha","beta"]}\n')
+    jj_repo.run(feature, "describe", "-m", "add alpha and beta")
+    jj = Jj(feature)
+    target = jj.one_commit("@", snapshot=True)
+    after = jj.one_commit("@-")
+
+    assert (
+        run_begin(
+            feature,
+            after=after.change_id,
+            before=target.change_id,
+            message="add alpha",
+        )
+        == 1
+    )
+    state = StateStore(feature).load()
+    assert state is not None
+    assert state.workspace_name == "feature"
+    assert state.workspace_root == str(feature)
+
+    jj_repo.write(feature, "catalog.json", '{"items":["alpha"]}\n')
+    assert run_finish(feature) == 0
+
+    jj = Jj(feature)
+    assert StateStore(feature).load() is None
     assert jj.one_commit("@").change_id == target.change_id
     base = jj.one_commit("@-")
     assert base.description == "add alpha"

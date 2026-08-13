@@ -11,7 +11,9 @@ from jj_sensei.repair import (
     StateStore,
     WorkspaceLock,
     converge,
+    run_converge,
     run_repair,
+    run_resolve,
 )
 from jj_sensei.setup import run_setup
 
@@ -55,6 +57,17 @@ def test_repair_walks_a_real_conflict_and_resumes(jj_repo):
     assert Jj(feature).one_commit("@").change_id == tip_change_id
     assert Jj(feature).commits("::@ & conflicts()") == []
     assert (feature / "f.txt").read_text() == "trunk\nfeature\n"
+
+
+def test_resolve_entry_point_runs_from_a_feature_workspace(jj_repo):
+    feature = _make_conflicted_feature(jj_repo)
+
+    assert run_resolve(feature) == 1
+    jj_repo.write(feature, "f.txt", "trunk\nfeature\n")
+    assert run_resolve(feature) == 0
+
+    assert StateStore(feature).load() is None
+    assert Jj(feature).commits("::@ & conflicts()") == []
 
 
 def test_repair_auto_resolves_sorted_additions_in_one_run(jj_repo):
@@ -216,6 +229,16 @@ def test_converge_allows_a_bookmark_on_the_keeper(jj_repo):
     jj = Jj(feature)
     assert jj.commits("divergent()") == []
     assert jj.one_commit("kept").commit_id == jj.one_commit("@").commit_id
+
+
+def test_converge_entry_point_runs_from_a_feature_workspace(jj_repo):
+    feature, keeper, _loser = _make_equivalent_divergence(jj_repo)
+
+    assert run_converge(feature) == 0
+
+    jj = Jj(feature)
+    assert jj.commits("divergent()") == []
+    assert jj.one_commit("@").commit_id == keeper.commit_id
 
 
 def test_converge_pauses_before_abandoning_a_bookmarked_loser(jj_repo):
