@@ -87,6 +87,40 @@ grapefruit
 The trailing blank line inside the diff is the newline being added, not
 content. Decide deliberately whether the resolution ends with a newline.
 
+## Modify/delete conflicts
+
+When one side deletes a file and the other edits it, `jj resolve --list`
+reports `2-sided conflict including 1 deletion` and the block renders the
+deletion as a diff that removes every line:
+
+```text
+<<<<<<< conflict 1 of 1
+%%%%%%% diff from: ytmvmyyy ee23e74e "init" (parents of rebased revision)
+\\\\\\\        to: orulktnq 8207e393 "delete doomed" (rebase destination)
+-line one
+-line two
++++++++ pkxqrpwv 8ebe4d35 "edit doomed" (rebased revision)
+line one
+line two EDITED
+>>>>>>> conflict 1 of 1 ends
+```
+
+Keeping the file is ordinary: write the content you want and the conflict
+clears. **Deleting it is the case that misleads**, and all three plausible
+moves were tested:
+
+| Move | Verified result |
+|---|---|
+| Empty the marker block (leave a zero-byte file) | Conflict clears, but the path stays **tracked as an empty file** — `jj diff --summary` still shows `A doomed.txt` |
+| `conflicts accept PATH diff` | Reports `accepted diff side`, and produces the **same zero-byte tracked file** — not a deletion, despite `diff` being the deleting side |
+| `rm PATH` | The only one that resolves it **as a deletion**: the path leaves the tree and the change becomes empty against its parent |
+
+So delete the file from the working copy with `rm` when the deletion is the
+intended resolution, then let the next jj command snapshot it. Confirm with
+`jj --no-pager diff --summary` — an unexpected `A <path>` means an empty file
+was committed instead of a removal. `conflicts accept PATH snapshot` keeps the
+edited content, which is the other genuine option.
+
 ## Alternative marker styles
 
 `ui.conflict-marker-style` also accepts `snapshot`, which reproduces every side

@@ -207,6 +207,11 @@ Use a mechanical strategy only after its result is clearly understood:
 "<skill-dir>/scripts/conflicts" accept FILE stack-snap-first
 ```
 
+A conflict reported as `including 1 deletion` needs care: resolving it as a
+deletion means `rm`-ing the path, because both emptying the marker block and
+`conflicts accept PATH diff` leave a tracked zero-byte file instead. See
+[Read jj conflict markers](references/markers.md).
+
 `stack` variants are allowed only for two pure-add sides reported as
 `stackable: true`. The repair helper automatically tries the conservative
 sorted-list resolver; it can also be previewed or run directly:
