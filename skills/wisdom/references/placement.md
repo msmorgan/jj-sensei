@@ -24,6 +24,11 @@ Choose the form whose selected side is the change you intend to describe and
 place. Always give a `FILESET` (skips the diff editor) and `-m` (skips the
 description editor).
 
+`-m` labels **only the selected half**. The other half keeps `REV`'s original
+description verbatim, which usually leaves it mislabelled — a second
+`jj --no-pager describe` on that half is part of the recipe, not an
+afterthought.
+
 Which side ends up as `@` depends on whether `REV` was `@`. Splitting the
 working copy leaves `@` on the **remainder** — a new change ID carrying `REV`'s
 original description, on top of the selected half, which kept `REV`'s change
@@ -48,6 +53,20 @@ jj --no-pager rebase -r CHANGE -A LOWER -B UPPER   # one specific edge
 Combining them is what makes this surgical around merges: `UPPER` may have
 several parents, and `LOWER` identifies the single edge being split. The two
 endpoints must be distinct revisions.
+
+### Swapping two adjacent commits
+
+Given `base → FIRST → SECOND`, to make `SECOND` come first, either form works
+and both are one command:
+
+```bash
+jj --no-pager rebase -r SECOND -B FIRST     # put SECOND before FIRST
+jj --no-pager rebase -r FIRST -A SECOND     # equivalently, FIRST after SECOND
+```
+
+Both leave `base → SECOND → FIRST` with descendants and `@` riding along.
+Pick whichever names the commit the user talked about — "move the docs commit
+earlier" is `-r DOCS -B <the one it should precede>`.
 
 Preview the revset before a nontrivial rebase — `jj --no-pager rebase -r
 'main..@' -A main` is the usual "rebase my stack onto main", but the exact
@@ -94,8 +113,17 @@ location for a reversal.
 
 `jj duplicate` is the cherry-pick: it **copies**, leaving the original where
 it is. Placement is what reaches your line — bare `jj duplicate -r REV` lands
-the copy beside the original, onto its **own** parents. `-B @` puts the copy
-beneath `@`, so `@` contains it; `-A @` puts it above, where `@` does not.
+the copy beside the original, onto its **own** parents.
+
+Decide from what you want `@`'s tree to contain, not from the flag names:
+
+- Want the fix **in** `@`'s tree → `-B @`. The copy becomes `@`'s parent, so
+  `@` builds on it and contains it.
+- Want the copy **stacked on top of** `@` → `-A @`. The copy becomes `@`'s
+  child, and **`@` will not contain it**.
+
+`-B` reads as "before" in graph order, which is *underneath* in stack order.
+When in doubt, run the command and check with `jj --no-pager diff --summary`.
 
 A merge is just a new change with two parents — **`jj merge` does not
 exist**:
