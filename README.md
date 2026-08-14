@@ -14,15 +14,17 @@ Agents still use the real `jj` CLI and learn its native model.
 ## What it does automatically
 
 When a session starts anywhere beneath a `.jj/` directory, jj-sensei injects
-a practical startup guide covering what an agent needs before its first
-command — in Antigravity, only before the first model invocation:
+a three-sentence preamble — in Antigravity, only before the first model
+invocation. It says three things: this is a Jujutsu repo, `git` commands are
+forbidden here, and before running any version control command — including a
+reflexive `git status` — load the `wisdom` skill.
 
-- jj's working-copy model and the absence of a staging area
-- direct Git-to-jj equivalents for common operations
-- change IDs, bookmarks, rebasing, workspaces, and colocated Git repositories
-- Git-shaped diff output and non-interactive command hygiene
-- workspace immutability and the escape hatches an agent must never use
-- when to stop guessing and consult the installed jj manual
+Everything else is pulled on demand rather than pushed into every session.
+`wisdom` is the hub an agent lands on: jj's model in a paragraph, the rules
+that bind every command, a table of contents for the references, and two
+routing tables — one keyed on what jj printed, one on what was asked. Common
+Git reflexes are answered inline there in a line; anything carrying a trap
+routes to the reference that owns it.
 
 The repository detector only examines parent directories and deliberately
 never invokes jj, since even a read-looking jj command can synchronize a
@@ -42,16 +44,17 @@ tool call; Claude Code and Codex receive it directly.
 
 ## Skills
 
-Four skills ship today, forming one lesson: routine work begins with the
-injected guidance, uncertainty goes to `knowledge`, uncommon history shaping
-goes to `wisdom`, repository trouble goes to `harmony`, and multi-workspace
-safety comes from `boundaries`.
+Four skills ship today, forming one lesson: every version control task
+begins at the `wisdom` hub, which answers directly or routes onward —
+repository trouble to `harmony`, multi-workspace safety to `boundaries`, and
+anything still unresolved to `knowledge`.
 
 ### knowledge
 
-`knowledge` reads documentation matching the installed jj version: a
-command, a language topic like revsets or filesets, a `docs/` manual page, a
-definition, or a full section. `rtfm` reads executable help; `rtfd`
+`knowledge` is the fallback: load it whenever a question about jj usage
+survives the hub and its references. It reads documentation matching the
+installed jj version — a command, a language topic like revsets or filesets,
+a `docs/` manual page, a definition, or a full section. `rtfm` reads executable help; `rtfd`
 navigates Markdown pages and referenced YAML tables, including
 case-sensitive regular-expression search of the Git or Jujutsu command
 field. The Git command table is roughly 60 compact rows and can be loaded
@@ -91,10 +94,10 @@ permission.
 
 ### wisdom
 
-`wisdom` recognizes history-shaping situations and routes each one to a
-focused technique, via a compact index keyed on what a user actually asked
-for — move this fix into that commit, undo this, publish this, reorder
-these — rather than a general tutorial or a long sequence of commands.
+`wisdom` is the hub. It carries jj's model, the always-binding rules — the
+non-interactive constraint, the ask-first rules, the forbidden operations —
+and the routing tables that send a request to the one reference that answers
+it, keyed on what the user asked for or on the token jj printed.
 
 When jj refuses an operation as immutable, a read-only helper reports which
 clause of the active `immutable_heads()` definition captures the revision
