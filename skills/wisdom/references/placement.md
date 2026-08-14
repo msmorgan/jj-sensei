@@ -33,32 +33,21 @@ produces; the two differ in what the next command operates on.
 
 ## State placement as an invariant
 
-`-A LOWER` places the selected revision after `LOWER`; `-B UPPER` places it
-before `UPPER`. Both are idempotent when the relationship already holds, so
-issue the command that states the desired relationship rather than checking
-first whether a move is needed:
+The injected guidance's rebase rules apply unchanged here: `-A` and `-B` each
+anchor the opposite endpoint to the target's current neighbors, are no-ops
+when the relationship already holds, and together name one exact edge. So
+issue the command that states the relationship you want rather than first
+checking whether a move is needed:
 
 ```bash
 jj --no-pager rebase -r CHANGE -A LOWER
 jj --no-pager rebase -r CHANGE -B UPPER
+jj --no-pager rebase -r CHANGE -A LOWER -B UPPER   # one specific edge
 ```
 
-Either flag alone names a complete insertion: `-A LOWER` rebases the
-selection onto `LOWER` and rebases `LOWER`'s descendants onto the result, so
-the opposite endpoint is `LOWER`'s current children; `-B UPPER` rebases the
-selection onto `UPPER`'s parents and rebases `UPPER` and its descendants onto
-the result, so the opposite endpoint is `UPPER`'s current parents. Neither
-needs the other to be well defined.
-
-Combine them only to name one specific existing edge:
-
-```bash
-jj --no-pager rebase -r CHANGE -A LOWER -B UPPER
-```
-
-This is surgical around merges: `UPPER` may have several parents, and
-`LOWER` identifies the one edge being split — the endpoints are distinct
-revisions.
+Combining them is what makes this surgical around merges: `UPPER` may have
+several parents, and `LOWER` identifies the single edge being split. The two
+endpoints must be distinct revisions.
 
 Prefer `-A` and `-B` for ordinary insertion and reordering — they express
 where the selection belongs and move the affected descendants with it. By

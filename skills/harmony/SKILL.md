@@ -9,6 +9,10 @@ This skill updates stale workspaces, converges safe divergent successors, and
 walks mutable conflicts oldest-first — never through operation-log surgery: no
 undo, redo, operation restore, or ignored immutability checks.
 
+Every `scripts/` helper here is a diagnostic to **run**. Its output is the
+evidence about this repository; its source says nothing about this repository,
+so reading the script instead of executing it answers nothing.
+
 Resolve every helper path from this loaded `SKILL.md`, not from the repository
 being repaired. If command or marker semantics are uncertain, load `knowledge`
 and query `resolve --full` or `config --search "Conflict marker style"` before
