@@ -125,10 +125,16 @@ no second `bookmark set` needed — and the two sides stop diverging once one is
 an ancestor of the other:
 
 ```bash
-jj --no-pager rebase -r LOCAL_CHANGE -o main@origin
+jj --no-pager rebase -r 'LOCAL_CHANGE::' -o main@origin
 jj --no-pager bookmark list --all          # no longer conflicted
 jj --no-pager git push -b main --dry-run
 ```
+
+The `::` is load-bearing. `-r LOCAL_CHANGE` alone rebases that one commit and
+reparents its descendants onto its **old** parent — which strands them off the
+base, including the ordinary empty `@` that `jj commit` left on top. jj still
+reports `Rebased 1 descendant commits`, so the damage is quiet. `'LOCAL_CHANGE::'`
+takes the commit and everything built on it, and jj reports the larger count.
 
 That dry-run must report `move forward`:
 
