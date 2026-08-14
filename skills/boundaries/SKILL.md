@@ -71,6 +71,29 @@ To audit without changing configuration:
 "<skill-dir>/scripts/setup-immutability" --check
 ```
 
+## Workspace lifecycle
+
+```bash
+jj --no-pager workspace list
+jj --no-pager workspace root
+jj --no-pager workspace add ../feature-x --name feature-x -r main -m "feature-x workspace"
+jj --no-pager workspace forget feature-x
+```
+
+`workspace add` creates the directory and gives it a working-copy commit;
+`-r` names that commit's parents, and with no `-r` the new workspace shares the
+current workspace's parents. Base a new workspace on default-owned history —
+`main`, `trunk()`, or another revision the `default` workspace owns — rather
+than on another live workspace's `@` or on mutable feature-only ancestry shared
+with it. That choice is what decides whether the two can later rewrite their
+own stacks, and it cannot be fixed afterwards without moving work.
+
+`workspace forget` unregisters a workspace but does not touch its directory,
+which can be deleted before or after. It is the resolution for the orphaned
+registrations this helper reports — and it stays a human-confirmed step: a
+missing directory can be an unmounted volume, and discarding a workspace's
+working-copy commit is the user's call, not an agent's.
+
 Keep active non-default workspaces independent. Do not create a workspace on
 another live non-default workspace's `@`, or on mutable feature-only ancestry
 shared with it. Basing independent work on default-owned history avoids the
