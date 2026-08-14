@@ -25,6 +25,13 @@ Choose the form whose selected side is the change you intend to describe and
 place. Always provide a `FILESET` to avoid the interactive diff editor and `-m`
 to avoid the description editor.
 
+Which side ends up as `@` depends on whether `REV` was `@`. Splitting the
+working copy leaves `@` on the **remainder** — a new change ID carrying `REV`'s
+original description, sitting on top of the selected half, which kept `REV`'s
+change ID. Splitting any other revision leaves `@` where it already was and
+rebases it along with the rest of the descendants. Say which of these the plan
+produces; the two differ in what the next command operates on.
+
 ## State placement as an invariant
 
 `-A LOWER` means the selected revision belongs after `LOWER`; `-B UPPER` means
@@ -68,6 +75,19 @@ jj --no-pager rebase -r CHANGE -o FORK_POINT
 jj --no-pager rebase -r CHANGE -o LEFT_PARENT -o RIGHT_PARENT
 ```
 
+`jj new` belongs to this family too: `-A`/`--insert-after` and
+`-B`/`--insert-before` create the new change at that position and rebase the
+displaced descendants onto it, which is how new work is inserted into the
+middle of a stack in one command:
+
+```bash
+jj --no-pager new -B LATER_CHANGE -m 'work that belongs underneath it'
+```
+
+Its positional arguments are the new change's **parents**, and `-r`/`-o` are
+aliases for those positionals — not the `--onto` of `rebase`. `jj new -o main`
+therefore means "parent is main", not "onto main".
+
 ## The same placement model elsewhere
 
 `jj split`, `jj revert`, and `jj duplicate` take the same `-o`/`-A`/`-B`
@@ -106,6 +126,26 @@ selected revisions, which makes the command’s scope visible in the expression
 and independently testable. Use `-s` only when its distinct source semantics
 are specifically required; do not reach for it merely as shorthand for
 descendants that can be written as `ROOT::`.
+
+## State the postconditions
+
+A placement plan is not finished until it says what the graph looks like
+afterwards. Three things are worth stating explicitly, because each is a place
+plans routinely go wrong:
+
+1. **The resulting parent chain** — the affected revisions in order, as
+   `jj --no-pager log -r '<range>' -T builtin_log_oneline` would print them.
+   Descendants rebase automatically; say which ones did.
+2. **Which change is `@` afterwards.** Placement commands move the working
+   copy in ways that are easy to miss: `jj new -A`/`-B` puts `@` on the newly
+   created change, splitting `@` puts `@` on the remainder, and rebasing a
+   revision that `@` descends from leaves `@` in place with a new commit hash.
+3. **Whether an empty working-copy tip survives.** An empty, undescribed `@`
+   is auto-pruned the moment the working copy moves off it, so a plan that
+   ends "then go back to where I was" cannot use `jj edit <old-tip-id>` — that
+   fails with `Revision ... doesn't exist`. Return with
+   `jj --no-pager new <rebased-neighbor>` instead, which produces an
+   equivalent fresh tip.
 
 These flags encode placement, not permission. Immutability, workspace
 ownership, and bookmark intent still apply; never bypass a refusal to make the
