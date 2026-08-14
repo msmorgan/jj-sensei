@@ -35,6 +35,36 @@ perform. The conflict is materialized in the files on disk, so resolving it is
 editing those files — or running `conflicts accept` — and letting the next jj
 command snapshot the result. No `edit`, no `new`, no `squash` is involved.
 
+## Unstaling a workspace is not lossless
+
+A stale workspace refuses every jj command — `st`, `log`, `op log`,
+`bookmark list` alike — with `Error: The working copy is stale`. Inspect it
+without changing anything by adding `--ignore-working-copy` to a read command.
+
+`jj workspace update-stale`, which `repair` runs first, realigns the workspace.
+Say plainly what that costs before running it. When the staleness came from
+another workspace abandoning this one's working-copy commit, update-stale moves
+this workspace to a fresh **empty** commit and rewrites the files on disk to
+match it: edits to tracked files are reverted, and files that existed only in
+the abandoned change are **deleted**. jj reports the damage in passing —
+`Added 0 files, modified 1 files, removed 1 files` — and it is easy to promise
+a realignment that quietly discards work.
+
+So state the loss first, and name the recovery route in the same breath. The
+abandoned content is still readable, and reading it needs no operation-log
+mutation:
+
+```bash
+"<skill-dir>/scripts/recover-file" list PATH
+"<skill-dir>/scripts/recover-file" show OPERATION PATH
+jj --no-pager op log
+jj --no-pager --at-op OPERATION file show -r ABANDONED_CHANGE PATH
+```
+
+Recover what matters, then unstale — or unstale and recover afterwards, since
+the snapshots survive either way. Never reach for `jj op restore` or `jj undo`
+to bring the work back.
+
 ## Fast path
 
 Run the one-stop repair helper from the affected workspace:
