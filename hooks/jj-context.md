@@ -7,13 +7,16 @@
 | `git status` | `jj --no-pager st` | Shows `@`, parents, changed paths, and conflicts. There is no `git add`: any command snapshots all unignored edits. |
 | `git diff HEAD` | `jj --no-pager diff --git` | Diffs `@` against its merged parent tree. |
 | `git log --oneline --graph -5` | `jj --no-pager log -r ::@ -n 5 -T builtin_log_oneline` | Revset ancestry; change IDs survive rewrites. |
-| `git blame src/parser.rs` | `jj --no-pager file annotate src/parser.rs` | Names the source change of each line. `qpvuntsm` below is an example change ID, not a hash. |
+| `git blame src/parser.rs` | `jj --no-pager file annotate src/parser.rs` | Names the change that **last touched** each line, not necessarily the one that introduced a symbol. When "introduced" is the question, corroborate with that change's own diff. `qpvuntsm` below is an example change ID, not a hash. |
 | `git rm --cached src/generated.rs` | `jj --no-pager file untrack src/generated.rs` | The path must already match an ignore pattern. |
 | `git add -A && git commit -m "Fix parser"` | `jj --no-pager commit -m "Fix parser"` | Describes `@`, then creates a fresh empty child. |
 | `git commit --amend -m "Fix parser"` | `jj --no-pager squash -m "Fix parser"` | Folds `@` into `@-`; `-m` sets the **destination's** description. The emptied `@` becomes a fresh empty change with a new ID. |
 | `git commit --fixup && git rebase --autosquash` | `jj --no-pager absorb` | Moves each working-copy hunk into the mutable ancestor that last touched those lines; ambiguous hunks stay put. `jj --no-pager squash --from @ --into qpvuntsm FILESET` for explicit control. |
 | `git stash` / `git stash pop` | `jj --no-pager new main -m "urgent fix"`, later `jj --no-pager edit qpvuntsm` | **Nothing to stash:** the WIP change stays put as a sibling; return by editing it. |
 | `git restore --source=HEAD -- src/parser.rs` | `jj --no-pager restore src/parser.rs` | Restores from the merged parent tree; no index. |
+| `git checkout abc123 -- src/parser.rs` | `jj --no-pager restore --from abc123 src/parser.rs` | `--from` pulls that revision's version **into** the working copy. **Direction trap:** `--into abc123` instead rewrites that historical commit. `--into` defaults to `@`, so name only `--from` unless rewriting history is the actual intent. |
+| `git cherry-pick abc123` | `jj --no-pager duplicate -r abc123 -B @` | **Copies**; the original stays where it is. Placement is required to reach your line: bare `jj duplicate -r abc123` copies onto the **original's** parents, landing the copy beside it on the other branch. `-B @` puts the copy beneath `@` so the working copy contains it; `-A @` puts it above, where `@` does not. |
+| `git merge feature` | `jj --no-pager new main feature -m "merge feature into main"` | A merge is just a new change with two parents; **`jj merge` does not exist**. Neither bookmark advances on its own — whether `main` should then move onto the merge is a decision to surface, not to assume. |
 | `git revert abc123` | `jj --no-pager revert -r abc123 -A @` | Requires one of `-o`/`-A`/`-B`; no default placement. A conflict from later edits to adjacent lines is recorded and normal, not a failure. |
 | `git switch -c fix-parser main` | `jj --no-pager new main -m "Fix parser"` | Creates and edits a child; creates no bookmark. |
 | `git switch fix-parser` | `jj --no-pager edit qpvuntsm` | Edits a change, not a checked-out branch; descendants rebase. |
