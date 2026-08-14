@@ -60,7 +60,27 @@ bookmark: main@origin [updated] untracked
 ```
 
 That line means the local `main` did **not** move — rebasing onto `main`
-after seeing it rebases onto stale history. The full lifecycle:
+after seeing it rebases onto stale history. The tracked counterpart reads
+`[updated] tracked`, and there the local bookmark **has** already advanced on
+its own: a tracked bookmark that has not diverged locally is fast-forwarded
+by the fetch, with no second command needed.
+
+Check tracking before you rely on either behavior, and check it with the
+question you actually mean:
+
+```bash
+jj --no-pager bookmark list --tracked main
+```
+
+That lists tracked remote bookmarks only, so an empty result is the answer.
+Do **not** read tracking off `jj bookmark list --all` — it shows tracked and
+untracked entries alike without distinguishing them, and by default hides a
+tracked remote bookmark whose target already matches the local one. Its
+formatting is not a tracking signal.
+
+Tracking is also not something `jj git init --colocate` sets up: initializing
+jj over an existing git clone leaves every remote bookmark untracked. Only
+`jj git clone` auto-tracks, and only the default branch. The full lifecycle:
 
 ```bash
 jj --no-pager git fetch --remote origin
@@ -182,6 +202,10 @@ survives until that push runs. Verify with `jj --no-pager git push -b feature
 --dry-run`, reporting `bookmark: feature [delete from <hash>]`. Deleting a
 bookmark does **not** abandon the revisions it pointed at.
 
+Deleting a bookmark that `@` currently sits on is safe and inert: the name
+goes away, and the commit, its description, and the working copy are all
+untouched. The bookmark is a label, not a container.
+
 `jj bookmark forget NAME` only unregisters the name locally and never
 propagates — remote bookmarks simply become untracked, so the branch stays on
 the remote. Use it to stop tracking, never to delete.
@@ -209,7 +233,20 @@ jj --no-pager tag set v1.0.0 -r main --allow-move   # to repoint an existing tag
 jj --no-pager tag list
 ```
 
+`jj tag set` refuses to move a tag that already exists — `Error: Refusing to
+move tag: v1.0.0`, hinting at `--allow-move`. Treat that refusal as a
+question for the user rather than a flag to add: a tag that already points
+somewhere else usually means the release name is taken, and moving it
+rewrites what that name meant.
+
 This jj publishes no tags: `jj git push` has no tag option at all, pushing
-bookmarks only, so creating a tag locally never releases it and there is no
-jj-side workaround. Surface that limitation and let the user push the tag
-through whatever mechanism the project uses; do not invent one.
+bookmarks only, so creating a tag locally never releases it. **There is no
+workaround, and looking for one is the failure.** Do not reach for `git push
+origin <tag>` — naming or planning a git command for this is itself the
+violation of the never-run-git rule, not a clever way around a jj gap. State
+the limitation and stop; that is the complete and correct plan.
+
+If the project needs something jj *can* push, a bookmark at the release
+revision is the honest alternative — but that is a change of plan the user
+has to agree to, since a bookmark is not a tag. Offer it as a question, never
+as a silent substitution.
