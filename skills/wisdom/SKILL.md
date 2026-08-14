@@ -149,7 +149,13 @@ being edited. These are diagnostics to **run**; their output is the evidence.
 
 `why-immutable` reports whether each selected revision is immutable, which
 clause of the active `immutable_heads()` definition captures it, and the
-bookmark or tag anchoring that clause. It is read-only. Run it before
+bookmark or tag anchoring that clause. It is read-only, and it names the
+repository it is describing on the first line — check that line, since the
+helper reads the working directory and a report from the wrong repo looks
+exactly like a surprising one. More than one clause can capture the same
+revision (an untracked remote bookmark on trunk is captured by both), and the
+report says so: every capturing clause has to stop matching before the
+revision becomes mutable. Run it before
 proposing a rebase, split, or placement against a named target, and again when
 jj refuses one. When the capturing clause is a repository alias rather than a
 jj builtin, the report says so and points at `knowledge`'s `rtfm revsets

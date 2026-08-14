@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from jj_sensei.immutability import (
     DECODE_HINT,
     active_definition,
@@ -102,3 +104,40 @@ def test_explain_reports_a_clause_it_cannot_evaluate_without_failing(jj_repo):
 
     assert verdicts[0].immutable is False
     assert verdicts[0].unevaluated == ("no_such_function()",)
+
+
+def test_render_names_the_repository_it_describes(jj_repo):
+    verdicts = explain(Jj(jj_repo.root), "@")
+
+    assert "repository:" not in render("builtin_immutable_heads()", verdicts)
+    # The helper reads the working directory, so a report that does not say
+    # which repo it came from hides the "ran it from the wrong place" mistake.
+    located = render("builtin_immutable_heads()", verdicts, Path("/repo/here"))
+    assert located.startswith("repository: /repo/here")
+
+
+def test_several_clauses_may_capture_one_revision_independently(jj_repo):
+    # A revision really can satisfy two clauses at once -- in the wild, an
+    # untracked remote bookmark that is also trunk. Report it as two genuine
+    # captures, not as a duplicate.
+    jj_repo.run(jj_repo.root, "bookmark", "create", "pinned", "-r", "@-")
+    jj_repo.run(jj_repo.root, "tag", "set", "v1.0.0", "-r", "@-")
+
+    verdicts = explain(Jj(jj_repo.root), "@-", "bookmarks(exact:'pinned') | tags()")
+
+    assert [capture.clause.text for capture in verdicts[0].captures] == [
+        "bookmarks(exact:'pinned')",
+        "tags()",
+    ]
+    report = render("bookmarks(exact:'pinned') | tags()", verdicts)
+    assert "2 clauses capture it independently" in report
+    assert "until every one stops matching" in report
+
+
+def test_a_single_capture_gets_no_independence_note(jj_repo):
+    jj_repo.run(jj_repo.root, "tag", "set", "v1.0.0", "-r", "@-")
+
+    verdicts = explain(Jj(jj_repo.root), "@-", "tags()")
+
+    assert len(verdicts[0].captures) == 1
+    assert "clauses capture it independently" not in render("tags()", verdicts)

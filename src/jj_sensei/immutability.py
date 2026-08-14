@@ -223,8 +223,12 @@ def explain(jj: Jj, revset: str, definition: str | None = None) -> list[Verdict]
     return verdicts
 
 
-def render(definition: str, verdicts: list[Verdict]) -> str:
-    lines = [f"immutable_heads() = {definition}", ""]
+def render(definition: str, verdicts: list[Verdict], root: Path | None = None) -> str:
+    # Name the repository first. This helper reads the working directory, and
+    # a report from the wrong repo is indistinguishable from a surprising one
+    # unless it says which repo it describes.
+    lines = [] if root is None else [f"repository: {root}"]
+    lines.extend([f"immutable_heads() = {definition}", ""])
     custom = False
     for verdict in verdicts:
         state = "immutable" if verdict.immutable else "mutable"
@@ -237,6 +241,14 @@ def render(definition: str, verdicts: list[Verdict]) -> str:
             custom = custom or capture.clause.origin is None
             for anchor in capture.anchors:
                 lines.append(f"        anchored at {anchor.label}")
+        if len(verdict.captures) > 1:
+            # Not a duplicate report: an untracked remote bookmark on trunk is
+            # genuinely captured by both clauses, and each one alone would keep
+            # the revision immutable.
+            lines.append(
+                f"    {len(verdict.captures)} clauses capture it independently; "
+                "it stays immutable until every one stops matching"
+            )
         if verdict.immutable and not verdict.captures:
             lines.append("    captured by no named clause; the root commit is always immutable")
         for clause in verdict.unevaluated:
@@ -264,6 +276,7 @@ def parser() -> argparse.ArgumentParser:
 def run_why_immutable(revsets: list[str], cwd: Path | str | None = None) -> int:
     jj = Jj(cwd)
     try:
+        root = jj.workspace_root()
         definition = active_definition(jj)
         verdicts: list[Verdict] = []
         for revset in revsets:
@@ -276,7 +289,7 @@ def run_why_immutable(revsets: list[str], cwd: Path | str | None = None) -> int:
     except (RuntimeError, ValueError) as error:
         print(f"why-immutable: {error}", file=sys.stderr)
         return 2
-    print(render(definition, verdicts))
+    print(render(definition, verdicts, root))
     return 0
 
 
