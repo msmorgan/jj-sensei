@@ -12,6 +12,7 @@ Nothing below needs them. Pick the tool from what is actually unwanted.
 | A change **and everything built on it** | `jj --no-pager abandon -r 'REV::'` | Bare `abandon -r REV` keeps the descendants and rebases them down; the `REV::` range is what actually drops the subtree. |
 | A commit made too early — keep the work | `jj --no-pager edit @-` | See below. This is the uncommit; `abandon` is not. |
 | One file that should never have been in a commit | `jj --no-pager restore --into REV --from REV- PATH` | Rewrites `REV`'s tree for that path only; descendants rebase and keep their change IDs. |
+| One file put back the way an earlier revision had it | `jj --no-pager restore --from REV PATH` | Pulls that revision's version **into** the working copy. **Direction trap:** `--into REV` rewrites that historical commit instead; `--into` defaults to `@`, so name only `--from` unless rewriting history is the intent. |
 | A landed or otherwise immutable change | `jj --no-pager revert -r REV -A TIP` | Adds a new commit that reverses `REV`; the original stays. |
 | Content that no longer exists anywhere | `jj --no-pager evolog -r REV`, or read-only operation log | See below. |
 | A squash that folded work into the wrong commit | `jj --no-pager split -r WRONG_TARGET FILESET -m '...'` | Take the work back out by ordinary rewrite; see [Tidy the working copy](tidy.md) and [Place changes deliberately](placement.md). **Not** `jj undo`. |

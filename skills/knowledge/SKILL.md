@@ -1,6 +1,6 @@
 ---
 name: knowledge
-description: Read authoritative command help and manual pages matching the installed Jujutsu version. Use before any jj operation not covered by injected repository guidance; when command flags or semantics are uncertain; or when revsets, filesets, templates, configuration, bookmarks, glossary terms, workspaces, Git interop, or other jj behavior needs authoritative version-matched clarification.
+description: The fallback for unresolved jj questions. Load whenever an agent still has questions about jj usage that jj-sensei's own guidance and references did not answer - unknown commands, uncertain flags or semantics, revsets, filesets, templates, configuration, bookmarks, glossary terms, workspaces, or Git interop - and read the authoritative help and manual pages matching the installed Jujutsu version.
 ---
 
 # Read the Installed jj Manual

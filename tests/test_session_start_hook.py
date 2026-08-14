@@ -31,7 +31,7 @@ def test_claude_session_start_emits_plain_context(tmp_path):
     result = run_hook({"hook_event_name": "SessionStart", "cwd": str(workspace)})
 
     assert result.returncode == 0
-    assert result.stdout.startswith("**This is a jj (Jujutsu) repo")
+    assert result.stdout.startswith("This is a Jujutsu (jj-vcs) repo")
 
 
 def test_agy_first_invocation_injects_ephemeral_context(tmp_path):
@@ -42,7 +42,7 @@ def test_agy_first_invocation_injects_ephemeral_context(tmp_path):
     assert result.returncode == 0
     response = json.loads(result.stdout)
     assert response["injectSteps"][0]["ephemeralMessage"].startswith(
-        "**This is a jj (Jujutsu) repo"
+        "This is a Jujutsu (jj-vcs) repo"
     )
 
 
@@ -125,7 +125,7 @@ def test_session_start_manifest_command_injects_guidance(tmp_path):
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.startswith("**This is a jj (Jujutsu) repo")
+    assert result.stdout.startswith("This is a Jujutsu (jj-vcs) repo")
 
 
 def test_hook_manifest_command_survives_a_plugin_root_containing_spaces(tmp_path):
@@ -146,7 +146,7 @@ def test_hook_manifest_command_survives_a_plugin_root_containing_spaces(tmp_path
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.startswith("**This is a jj (Jujutsu) repo")
+    assert result.stdout.startswith("This is a Jujutsu (jj-vcs) repo")
 
 
 def test_antigravity_manifest_targets_the_shared_hook_script():

@@ -33,11 +33,11 @@ produces; the two differ in what the next command operates on.
 
 ## State placement as an invariant
 
-The injected guidance's rebase rules apply unchanged here: `-A` and `-B` each
-anchor the opposite endpoint to the target's current neighbors, are no-ops
-when the relationship already holds, and together name one exact edge. So
-issue the command that states the relationship you want rather than first
-checking whether a move is needed:
+Rebasing is surgical and never pauses at conflicts — they land in the
+resulting commits. `-A` and `-B` each anchor the opposite endpoint to the
+target's current neighbors, are no-ops when the relationship already holds,
+and together name one exact edge. So issue the command that states the
+relationship you want rather than first checking whether a move is needed:
 
 ```bash
 jj --no-pager rebase -r CHANGE -A LOWER
@@ -48,6 +48,10 @@ jj --no-pager rebase -r CHANGE -A LOWER -B UPPER   # one specific edge
 Combining them is what makes this surgical around merges: `UPPER` may have
 several parents, and `LOWER` identifies the single edge being split. The two
 endpoints must be distinct revisions.
+
+Preview the revset before a nontrivial rebase — `jj --no-pager rebase -r
+'main..@' -A main` is the usual "rebase my stack onto main", but the exact
+selection depends on the intended stack.
 
 Prefer `-A` and `-B` for ordinary insertion and reordering — they express
 where the selection belongs and move the affected descendants with it. By
@@ -87,6 +91,22 @@ jj --no-pager duplicate -r CHANGE -A TIP
 `jj revert` is stricter than the others: it *requires* one of the three and
 refuses to run without a placement, since there is no sensible default
 location for a reversal.
+
+`jj duplicate` is the cherry-pick: it **copies**, leaving the original where
+it is. Placement is what reaches your line — bare `jj duplicate -r REV` lands
+the copy beside the original, onto its **own** parents. `-B @` puts the copy
+beneath `@`, so `@` contains it; `-A @` puts it above, where `@` does not.
+
+A merge is just a new change with two parents — **`jj merge` does not
+exist**:
+
+```bash
+jj --no-pager new main feature -m 'merge feature into main'
+```
+
+Neither bookmark advances on its own; whether `main` should then move onto the
+merge is a decision to surface, not assume. See
+[Publish and land work](shipping.md).
 
 ## Select revisions explicitly
 

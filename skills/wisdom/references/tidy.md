@@ -37,8 +37,23 @@ destination's description; `-u`/`--use-destination-message` keeps the
 destination's and discards the source's — usually what's wanted when
 squashing a fix into an already-well-described commit.
 
+Reword without folding anything: `jj --no-pager describe -r @- -m '...'`
+touches the description and nothing else, so unrelated work in `@` stays in
+`@`. Reach for `squash` only when the working-copy diff really belongs in the
+parent.
+
 Squashing everything out of `@` empties it. jj then abandons that revision and
 gives the working copy a new, empty commit with a new change ID.
+
+## Commit only part of the working copy
+
+```bash
+jj --no-pager commit FILESET -m 'what those paths do'
+```
+
+The named paths stay in the committed change; everything else moves to a new
+working-copy commit on top. Unlike `jj split`, this never moves bookmarks
+forward.
 
 ## Repeated splitting
 

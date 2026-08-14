@@ -48,9 +48,12 @@ TERM` rather than guessing at a function name.
 
 ## Prefer the simplest sufficient view
 
-Use `builtin_log_oneline` for ordinary graph inspection, and `jj diff
---summary` or `jj diff --stat` to learn a change's scope before requesting
-its patch. A template earns its keep when several facts belong on each log
+Inspect in widening steps and stop at the one that answers the question.
+Identity and shape first: `jj --no-pager log -r '<revset>' -T
+builtin_log_oneline`. Then volume: `jj diff --stat`, or `--summary` for
+changed paths — bare `jj diff` compares `@` against its *merged* parent tree,
+which is what you want when `@` is a merge. Then content, scoped: `jj diff --git <paths>`. Read a full
+`jj show --git <rev>` only when the complete patch is required. A template earns its keep when several facts belong on each log
 row, a list needs transforming, or output must be machine-readable. An
 unscoped `jj show --git` is not a discovery tool for an unknown or
 potentially large change.

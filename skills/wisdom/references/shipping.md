@@ -1,8 +1,11 @@
 # Publish and land work
 
-Bookmarks are the only thing `jj git push` moves. Nothing about a bookmark is
-implicit: none is checked out, none advances because work started from it,
-and none is created by `jj new` or `jj commit`.
+Bookmarks are named pointers to revisions, and the only thing `jj git push`
+moves. They stay attached when their revision is rewritten, never advance on
+their own, and are never checked out. Nothing about a bookmark is implicit:
+none advances because work started from it, and none is created by `jj new`
+or `jj commit`. Create, move, or delete one only when the user, task, or
+workflow calls for it.
 
 ## Point a bookmark at real work
 

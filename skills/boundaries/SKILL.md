@@ -81,6 +81,10 @@ jj --no-pager workspace add ../feature-x --name feature-x -r main -m "feature-x 
 jj --no-pager workspace forget feature-x
 ```
 
+Workspaces are live pointers to a mutable change in one shared repo, unlike
+Git worktrees: every working copy shares the revision graph, bookmarks, and
+operation log. Each is addressable in revsets as `<name>@` (e.g. `default@`).
+
 `workspace add` creates the directory and gives it a working-copy commit;
 `-r` names that commit's parents, and with no `-r` the new workspace shares
 the current workspace's parents. Base new workspaces on default-owned
