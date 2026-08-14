@@ -35,6 +35,37 @@ perform. The conflict is materialized in the files on disk, so resolving it is
 editing those files — or running `conflicts accept` — and letting the next jj
 command snapshot the result. No `edit`, no `new`, no `squash` is involved.
 
+## Fixing a conflict that lives in an ancestor
+
+A conflict recorded in an ancestor is materialized in `@` too, which makes an
+inviting trap: editing the markers where they appear resolves them **in `@`
+only**, and the ancestor stays conflicted. `jj --no-pager log -r 'conflicts()'`
+after the edit still lists it, and every future rebase across it carries the
+conflict along.
+
+Fix it where it lives. Verified sequence, for a single conflict whose intended
+content is known:
+
+```bash
+jj --no-pager log -r 'conflicts()' -T builtin_log_oneline   # find the oldest
+jj --no-pager edit CONFLICTED_CHANGE_ID                     # @ becomes it
+# edit the marker block in the file to the intended content
+jj --no-pager st                                            # snapshots; rebases descendants
+jj --no-pager log -r 'conflicts()' -T builtin_log_oneline   # must be empty
+jj --no-pager edit ORIGINAL_TIP_CHANGE_ID                   # go back
+```
+
+jj reports `Rebased 1 descendant commits onto updated working copy` as the fix
+propagates. Return by **change ID**: the tip is real described work, so it
+survives the excursion and `jj edit` finds it again. Capture that ID before
+moving, and do not use `@` to mean it — `@` is the conflicted revision for the
+duration.
+
+Prefer full `repair` instead whenever more than one conflict is recorded, the
+workspace is stale, or divergence is in play: it walks conflicts oldest-first,
+which is the order that avoids re-resolving the same content, and it stops on
+the parts that need judgment.
+
 ## Unstaling a workspace is not lossless
 
 A stale workspace refuses every jj command — `st`, `log`, `op log`,
