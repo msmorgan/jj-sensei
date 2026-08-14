@@ -4,10 +4,10 @@ Use jj's template language to request the smallest view that answers the
 question. Templates format objects; revsets and filesets still select the
 revisions and paths.
 
-Do not invent template syntax. If an idiom below is insufficient, load the
-`knowledge` skill and query the installed reference with `rtfm templates
---search TERM` or `rtfd docs/templates --section HEADING`. Use `--full` only
-when the complete language reference is genuinely needed.
+Do not invent template syntax. If an idiom below is insufficient, load
+`knowledge` and query the installed reference with `rtfm templates --search
+TERM` or `rtfd docs/templates --section HEADING`. Use `--full` only when the
+complete reference is genuinely needed.
 
 ## Select before you format
 
@@ -42,17 +42,18 @@ jj --no-pager log -r 'mine() & ~empty() & files("src/parser.rs") & description(s
 ```
 
 Build these up one clause at a time and check the count as you go; a revset
-that silently selects nothing looks identical to one that found nothing. When a
-predicate is not listed above, load `knowledge` and read `rtfm revsets --search
+that silently selects nothing looks identical to one that found nothing. For
+a predicate not listed above, use the same lookup with `rtfm revsets --search
 TERM` rather than guessing at a function name.
 
 ## Prefer the simplest sufficient view
 
-Use `builtin_log_oneline` for ordinary graph inspection. Use `jj diff
---summary` or `jj diff --stat` to learn a change's scope before requesting its
-patch. A template is useful when several facts belong on each log row, a list
-needs transforming, or output must be machine-readable. An unscoped `jj show
---git` is not a discovery tool for an unknown or potentially large change.
+Use `builtin_log_oneline` for ordinary graph inspection, and `jj diff
+--summary` or `jj diff --stat` to learn a change's scope before requesting
+its patch. A template earns its keep when several facts belong on each log
+row, a list needs transforming, or output must be machine-readable. An
+unscoped `jj show --git` is not a discovery tool for an unknown or
+potentially large change.
 
 Start a custom template against one revision, then widen the revset after its
 shape is correct:
@@ -105,7 +106,7 @@ jj --no-pager log -r CHANGE --no-graph \
   -T 'json(self.diff().files().map(|e| e.display_diff_path())) ++ "\n"'
 ```
 
-Useful building blocks include `if`, `coalesce`, `++`, `.map()`, `.filter()`,
-`.join()`, and `json()`. Their names describe intent, but their accepted types
-and exact method forms remain version-specific; consult the installed template
-reference rather than extrapolating from an example.
+Useful building blocks: `if`, `coalesce`, `++`, `.map()`, `.filter()`,
+`.join()`, `json()`. Names describe intent, but accepted types and exact
+method forms are version-specific — consult the installed reference rather
+than extrapolating from an example.

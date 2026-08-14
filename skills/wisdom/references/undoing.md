@@ -8,7 +8,7 @@ Nothing below needs them. Pick the tool from what is actually unwanted.
 | What is unwanted | Tool | Notes |
 |---|---|---|
 | Uncommitted content in `@` | `jj --no-pager restore FILESET` | Restores those paths from the parent tree; the change and its description survive. Bare `jj restore` empties `@` entirely. |
-| A whole mutable change, **content included** | `jj --no-pager abandon -r REV` | **Destructive:** the change's content is discarded, and if the working copy sits on an empty child, the files leave the disk too. Descendants rebase onto its parents. Bookmarks on it are deleted unless `--retain-bookmarks` moves them to the parents. For unwanted work only — never to un-commit wanted work. |
+| A whole mutable change, **content included** | `jj --no-pager abandon -r REV` | **Destructive:** content is discarded (files leave disk too if the working copy sits on an empty child); descendants rebase onto its parents; bookmarks are deleted unless `--retain-bookmarks` moves them there. For unwanted work only — never to un-commit wanted work. |
 | A change **and everything built on it** | `jj --no-pager abandon -r 'REV::'` | Bare `abandon -r REV` keeps the descendants and rebases them down; the `REV::` range is what actually drops the subtree. |
 | A commit made too early — keep the work | `jj --no-pager edit @-` | See below. This is the uncommit; `abandon` is not. |
 | One file that should never have been in a commit | `jj --no-pager restore --into REV --from REV- PATH` | Rewrites `REV`'s tree for that path only; descendants rebase and keep their change IDs. |
@@ -21,45 +21,35 @@ Nothing below needs them. Pick the tool from what is actually unwanted.
 A premature `jj commit` is not undone by abandoning anything. `jj --no-pager
 edit @-` moves the working copy back onto the change that was just committed:
 its content becomes working-copy changes again, its description survives, and
-the empty tip that `jj commit` created is auto-pruned on the way out. Verified
-consequence worth knowing: if the tip had picked up unrelated edits, those stay
-behind in their own change rather than being folded in — `jj --no-pager log`
-will show it, and `jj --no-pager edit` returns to it.
+the empty tip that `jj commit` created is auto-pruned on the way out. If the
+tip had picked up unrelated edits, those stay behind in their own change
+rather than being folded in — `jj --no-pager log` will show it, and `jj
+--no-pager edit` returns to it.
 
 `jj --no-pager squash --from @- --into @` reaches a similar place but is not
-the same operation: it *merges* the parent's diff into `@`, so unrelated
-working-copy edits end up in one change with the uncommitted work, and `@`
-inherits the parent's description because its own was empty. Prefer `edit @-`
-unless combining the two is the actual intent.
+the same operation: it *merges* the parent's diff into `@`, mixing unrelated
+working-copy edits with the uncommitted work, and `@` inherits the parent's
+description since its own was empty. Prefer `edit @-` unless combining is the
+actual intent.
 
-Reaching for `jj abandon -r @-` here is the mistake this section exists to
-prevent. It discards the content outright — the files disappear from the
-working copy as well — and nothing about the command warns that the work was
-wanted.
+`jj abandon -r @-` is the wrong tool here: it discards the content outright —
+the files disappear from the working copy too — and nothing about the command
+warns that the work was wanted.
 
-`jj restore` restores whole files, and `jj diffedit` — which would take only
-part of one — opens a diff editor and is therefore unavailable here; split by
-fileset instead.
+`jj restore` restores whole files, and `jj diffedit` — which takes only part
+of one — opens a diff editor, unavailable here; split by fileset instead.
 
-A squash that landed in the wrong commit is the most common reason agents
-reach for `jj undo`, and it is never the right tool. The squash is an ordinary
-rewrite and comes back out as one: `jj --no-pager split -r WRONG_TARGET
-FILESET -m '<description for the extracted work>'` separates it again, and the
-op log — read-only — shows exactly what the squash did if the target is
-unclear:
-
-```bash
-jj --no-pager op log
-jj --no-pager op show OP_ID
-```
-
-Read [Tidy the working copy into the right commits](tidy.md) for which half of
-the split keeps the change ID and where the extracted work lands.
+A squash landing in the wrong commit is the most common reason agents reach
+for `jj undo` — never the right tool. Split it back out with the command in
+the table above; if the target is unclear, the read-only op log below shows
+what the squash did. Read [Tidy the working copy into the right
+commits](tidy.md) for which half of the split keeps the change ID and where
+the extracted work lands.
 
 ## Reverting immutable work
 
 `jj revert` refuses to run without a placement flag — one of `-o`, `-A`, or
-`-B` is required, exactly as for `rebase` and `duplicate`:
+`-B` is required:
 
 ```bash
 jj --no-pager revert -r REV -A TIP
@@ -74,15 +64,14 @@ Reverted 1 commits as follows:
   lyykzpxu 8eb49939 (conflict) Revert "change two"
 ```
 
-That is the expected outcome, not a failure. Resolve the conflict in place —
-it is materialized in the working copy — and continue. Adjacent-line edits are
-enough to produce one.
+That is the expected outcome, not a failure. Resolve it in place, in the
+working copy, and continue — adjacent-line edits are enough to produce one.
 
 ## Recovering content that is gone
 
-`jj evolog -r REV` shows a change's own earlier versions, including the
-per-snapshot states an agent's edits produced. It is the first stop when work
-was overwritten inside one change.
+`jj evolog -r REV` shows a change's own earlier versions, including
+per-snapshot states from an agent's edits — the first stop when work was
+overwritten inside one change.
 
 When the content belonged to a change that no longer exists, read the
 operation log. Reading it is permitted; mutating it is not:
@@ -95,12 +84,12 @@ jj --no-pager --at-op OP_ID log -r 'all()' -T builtin_log_oneline
 ```
 
 `--at-op` with a read command reconstructs what the repository looked like
-then. Copy the recovered content forward as an ordinary edit. Never use `op
+then; copy the recovered content forward as an ordinary edit. Never use `op
 restore` or `op revert` to move the repository back.
 
-The `harmony` skill's `recover-file` helper automates that walk for one path:
-it finds the snapshot operations whose content differs and prints any one of
-them. States that were never snapshotted are not recoverable by any route.
+The `harmony` skill's `recover-file` helper automates that walk for one path,
+finding the snapshot operations whose content differs. States that were never
+snapshotted are not recoverable by any route.
 
 ## Immutable-target triage
 
@@ -117,7 +106,7 @@ route around.
    `scripts/why-immutable REV` names which clause of the active
    `immutable_heads()` definition captures it and what anchors that clause.
 
-2. **Stop.** Do not retarget. Do not search diffs for a similar change that
+2. **Stop.** Don't retarget, and don't search for a similar change that
    happens to be mutable. The refusal means the request as understood would
    rewrite published history.
 
@@ -125,8 +114,8 @@ route around.
    immutable.
 
 4. **Present the real options** and let the user choose:
-   - Move or advance the anchoring bookmark or tag, and say plainly that
-     rewriting what a remote already has requires a force push and disrupts
+   - Move or advance the anchoring bookmark or tag — but say plainly that
+     rewriting what a remote already has needs a force push and disrupts
      anyone who fetched it.
    - `jj duplicate -r REV -A TIP` to copy the content somewhere mutable and
      work on the copy.

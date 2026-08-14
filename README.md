@@ -2,21 +2,20 @@
 
 *Teach your agents Jujutsu.*
 
-jj-sensei is an Antigravity, Claude Code, and Codex plugin that teaches coding
-agents to use [Jujutsu (jj)](https://jj-vcs.github.io/jj/) fluently and safely.
-It gives them the working knowledge they need for everyday jj operations,
+jj-sensei is an Antigravity, Claude Code, and Codex plugin that teaches
+coding agents to use [Jujutsu (jj)](https://jj-vcs.github.io/jj/) fluently
+and safely — giving them working knowledge for everyday jj operations,
 direct access to the manual installed on your machine, and guarded tools for
-the situations where repositories become difficult.
+when repositories get difficult.
 
 It does not replace jj or hide it behind a new version-control abstraction.
 Agents still use the real `jj` CLI and learn its native model.
 
 ## What it does automatically
 
-When a session starts anywhere beneath a `.jj/` directory, jj-sensei injects a
-practical startup guide. In Antigravity this happens before the first model
-invocation; later invocations are left alone. The guide covers the things an
-agent needs before its first command:
+When a session starts anywhere beneath a `.jj/` directory, jj-sensei injects
+a practical startup guide covering what an agent needs before its first
+command — in Antigravity, only before the first model invocation:
 
 - jj's working-copy model and the absence of a staging area
 - direct Git-to-jj equivalents for common operations
@@ -25,125 +24,120 @@ agent needs before its first command:
 - workspace immutability and the escape hatches an agent must never use
 - when to stop guessing and consult the installed jj manual
 
-The repository detector only examines parent directories; it deliberately does
-not invoke jj, since even a read-looking jj command can synchronize a colocated
-Git repository. Outside a jj repository, the hook emits nothing.
+The repository detector only examines parent directories and deliberately
+never invokes jj, since even a read-looking jj command can synchronize a
+colocated Git repository. Outside a jj repository, the hook emits nothing.
 
-A second hook provides a compact live status line at session start and after
-each file-writing or shell tool. It identifies the workspace and working-copy
-change, summarizes descriptions and edit volume, and makes conflicts, stale
-workspaces, and bookmarks on `@` difficult to miss. Post-tool probes eagerly
-snapshot agent-authored filesystem edits, but repeated context is suppressed
-until the rendered state changes.
+A second hook shows a compact live status line at session start and after
+each file-writing or shell tool: workspace and working-copy change, a
+description and edit-volume summary, and conflicts, stale workspaces, and
+bookmarks on `@` made hard to miss. Post-tool probes eagerly snapshot
+agent-authored filesystem edits, but repeated context is suppressed until
+rendered state changes.
 
 Status and history-repair operations share one short workspace lock. The hook
-never repairs, unstales, or changes graph topology, and it always allows the
-turn to continue. Antigravity receives changed status on the invocation after a
+never repairs, unstales, or changes graph topology, and always lets the turn
+continue. Antigravity receives changed status on the next invocation after a
 tool call; Claude Code and Codex receive it directly.
 
 ## Skills
 
-Four skills ship today. They are meant to feel like parts of one lesson:
-routine work begins with the injected guidance, uncertainty goes to
-`knowledge`, uncommon history shaping goes to `wisdom`, repository trouble goes
-to `harmony`, and multi-workspace safety comes from `boundaries`.
+Four skills ship today, forming one lesson: routine work begins with the
+injected guidance, uncertainty goes to `knowledge`, uncommon history shaping
+goes to `wisdom`, repository trouble goes to `harmony`, and multi-workspace
+safety comes from `boundaries`.
 
 ### knowledge
 
-`knowledge` reads authoritative documentation matching the installed jj
-version. An agent can ask for a command, a language topic such as revsets or
-filesets, a broader `docs/` manual page, one relevant definition, or the full
-section. The included `rtfm` helper reads executable help, while `rtfd`
-navigates Markdown pages and referenced YAML tables, including field-aware,
-case-sensitive regular-expression search of either the Git or Jujutsu command
-field. The complete Git command table is roughly 60 compact rows and can be
-loaded directly; when the complete inventory is unnecessary, search narrows it
-in one call. Both helpers avoid vendoring a second, possibly stale copy of jj's
-documentation.
+`knowledge` reads documentation matching the installed jj version: a
+command, a language topic like revsets or filesets, a `docs/` manual page, a
+definition, or a full section. `rtfm` reads executable help; `rtfd`
+navigates Markdown pages and referenced YAML tables, including
+case-sensitive regular-expression search of the Git or Jujutsu command
+field. The Git command table is roughly 60 compact rows and can be loaded
+directly, or narrowed by search. Both helpers avoid vendoring a second,
+possibly stale copy of jj's documentation.
 
-Command and language help comes from the local executable. Manual pages come
-from the package when detected, or from an explicit `JJ_SENSEI_DOCS_DIR` for
-unusual layouts. The helper does not fetch missing documentation. Tests
-fingerprint both surfaces when available so jj upgrades expose new commands,
-options, language features, and pages for deliberate review. Configured manual
-trees also warn when detectable version metadata has drifted from the installed
-jj; docs-only copies can provide a `.jj-version` sidecar.
+Command and language help comes from the local executable; manual pages come
+from the package when detected, or an explicit `JJ_SENSEI_DOCS_DIR` for
+unusual layouts. The helper never fetches missing documentation. Tests
+fingerprint both surfaces when available, so jj upgrades expose new commands,
+options, language features, and pages for review. Configured manual trees
+warn when detectable version metadata drifts from the installed jj;
+docs-only copies can carry a `.jj-version` sidecar.
 
 ### harmony
 
-`harmony` handles the messy states that otherwise turn into long, fragile
-runbooks: stale workspaces, divergent working-copy successors, and file
-conflicts. Its one-stop repair command updates stale state, converges only
-equivalent divergence, and walks mutable conflicts from oldest to newest.
+`harmony` handles messy states that otherwise become long, fragile runbooks:
+stale workspaces, divergent working-copy successors, and file conflicts. Its
+one-stop repair command updates stale state, converges only equivalent
+divergence, and walks mutable conflicts oldest to newest.
 
-Repair is locked and crash-resumable. It journals completed transitions,
-automates only resolutions it can establish are safe, and pauses with a useful
-diagnosis when human judgment is required. Narrower tools are included for
-inspecting conflict markers, accepting a specifically chosen representation,
-and running conservative mechanical resolutions.
+Repair is locked and crash-resumable: it journals completed transitions,
+automates only resolutions it can establish are safe, and pauses with a
+useful diagnosis when needed. Narrower tools inspect conflict markers,
+accept a specifically chosen representation, and run conservative mechanical
+resolutions.
 
 A read-only recovery helper reads one file's earlier content out of jj's
-operation snapshots, reporting only the operations where that content actually
-changed. It loads the repository at an operation and never restores it.
+operation snapshots, reporting only the operations where that content
+actually changed. It loads the repository at an operation and never restores
+it.
 
 It never performs operation-log surgery or bypasses immutability. Within a
-repair invocation, an internal error preserves the journal and prevents later
-transaction steps; it does not turn ordinary jj command errors into a reason to
-stop and ask for permission.
+repair invocation, an internal error preserves the journal and blocks later
+transaction steps — but ordinary jj command errors don't trigger a stop for
+permission.
 
 ### wisdom
 
 `wisdom` recognizes history-shaping situations and routes each one to a
-focused technique. Its entry point is a compact index keyed on what a user
-actually asked for—move this fix into that commit, undo this, publish this,
-reorder these—rather than a general tutorial or a long sequence of commands.
+focused technique, via a compact index keyed on what a user actually asked
+for — move this fix into that commit, undo this, publish this, reorder
+these — rather than a general tutorial or a long sequence of commands.
 
 When jj refuses an operation as immutable, a read-only helper reports which
-clause of the active `immutable_heads()` definition captures the revision and
-which bookmark or tag anchors that clause, so the refusal can be explained
-rather than worked around.
+clause of the active `immutable_heads()` definition captures the revision
+and which bookmark or tag anchors it, explaining the refusal rather than
+working around it.
 
-It also records small, high-leverage idioms that are easy to miss in the full
-manual: choosing whether a selected fileset becomes the earlier or later half
-of a split, expressing after/before placement as an idempotent invariant, and
+It also records small, high-leverage idioms easy to miss in the full manual:
+choosing whether a selected fileset becomes the earlier or later half of a
+split, expressing after/before placement as an idempotent invariant, and
 using `-A` with `-B` to name one exact graph edge. It prefers explicit `-r`
-revsets—including `ROOT::` for a subtree—and previews nontrivial selections
-before mutation. For ordinary insertion and reordering it prefers `-A`/`-B`;
-`-o` is reserved for intentional forks and merges.
+revsets — including `ROOT::` for a subtree — and previews nontrivial
+selections before mutation, favoring `-A`/`-B` for ordinary insertion and
+reordering while reserving `-o` for intentional forks and merges.
 
-For inspection, `wisdom` supplies small, tested template idioms for identities,
-state flags, parents, changed paths, stats, and machine-readable lists. It
-prefers built-in and bounded views before custom templates or full patches;
-anything beyond the catalog routes to `knowledge`'s installed, version-matched
-template reference instead of being guessed.
+For inspection, `wisdom` supplies small, tested template idioms for
+identities, state flags, parents, changed paths, stats, and machine-readable
+lists. It favors built-in and bounded views before custom templates or full
+patches; anything beyond the catalog routes to `knowledge`'s version-matched
+template reference rather than being guessed.
 
-Because the live-status hook snapshots after agent tools, `wisdom` can also use
-`jj evolog` to recover the ordered patches inside an oversized `@` and rebuild
-them as a coherent series of commits. The snapshots preserve execution history;
-the agent still chooses semantic boundaries rather than treating every tool call
-as a commit.
+Because the live-status hook snapshots after agent tools, `wisdom` can use
+`jj evolog` to recover the ordered patches inside an oversized `@` and
+rebuild them into a coherent commit series. The snapshots preserve execution
+history; the agent still chooses semantic boundaries, not every tool call as
+a commit.
 
 Its guarded escape hatch is interpolation: turning one mixed change into two
-by constructing an intermediate state between two commits when doing so is not
-a matter of selecting files and lines—for example, because generated artifacts
-must be recreated at that state. jj has no index separate from its working-copy
-commit, so the helper temporarily rehomes the upper revision's tree while
-constructing the lower one. It inserts the change into an explicitly named
-`-A`/`-B` edge, journals every transition, supports merge edges, and can finish
-or abort after an interrupted process without operation-log recovery. It is
-intentionally narrow, not a general replacement for `jj split`.
+by constructing an intermediate state between them when that isn't a matter
+of selecting files and lines — e.g. because generated artifacts must be
+recreated at that state. The guarded helper journals every transition and
+can finish or abort an interrupted construction. It's intentionally narrow,
+not a general replacement for `jj split`.
 
 ### boundaries
 
-`boundaries` installs and audits a repository-level `immutable_heads()` policy
-for repositories with multiple live jj workspaces. From a feature workspace,
-other live working-copy lines become immutable; from the primary `default`
-workspace, the coordinator retains the flexibility to rewrite those feature
-stacks.
+`boundaries` installs and audits a repository-level `immutable_heads()`
+policy for repositories with multiple live jj workspaces: from a feature
+workspace, other live working-copy lines become immutable; from `default`,
+the coordinator keeps the flexibility to rewrite those feature stacks.
 
 The setup helper verifies the configuration after installing it and can also
 run in read-only check mode. It detects shared mutable ancestry between live
-feature workspaces and treats that topology as a safe stop instead of teaching
+feature workspaces and treats that as a safe stop rather than teaching
 agents to bypass the guard.
 
 ## Install

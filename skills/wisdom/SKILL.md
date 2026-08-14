@@ -30,8 +30,8 @@ helper paths from this loaded `SKILL.md`, not from the repository being edited.
   lifecycle, and the tag limitation.
 - **“My bookmark shows `??` / question marks.”** Read
   [Publish and land work](references/shipping.md) — its conflicted-bookmark
-  section covers what `??` means and why clearing it the obvious way silently
-  drops the other side.
+  section explains `??` and why clearing it the obvious way silently drops
+  the other side.
 - **“Move that commit before this one.” “Reorder these.” “Put it on that
   branch point.” “Move this whole subtree.”** Read
   [Place changes deliberately](references/placement.md) for `-A`/`-B`/`-o`,
@@ -39,8 +39,8 @@ helper paths from this loaded `SKILL.md`, not from the repository being edited.
 - **“Which change introduced this line / this function?”** Start with
   `jj --no-pager file annotate PATH`, then read the attributed change's own
   diff to confirm. Annotate names the change that **last touched** each line,
-  which is not always the one that introduced the symbol, so corroborate
-  before reporting. Widen with a revset when the file has moved or the symbol
+  not necessarily the one that introduced the symbol, so corroborate before
+  reporting. Widen with a revset when the file has moved or the symbol
   predates it — see [Use templates without guessing](references/templates.md)
   for `files()` and `description()` selection.
 - **“Rebuild all of that into a proper series.” “How did this change get to
@@ -50,8 +50,8 @@ helper paths from this loaded `SKILL.md`, not from the repository being edited.
 - **“Check whether…” “Verify that…” “Which revisions/paths…”** — any moment
   that calls for reading state rather than changing it. Read
   [Use templates without guessing](references/templates.md): it covers
-  **selecting** the revisions with revset predicates and ranges first, then
-  formatting them into the smallest view that answers the question.
+  **selecting** revisions with revset predicates and ranges, then formatting
+  them into the smallest view that answers the question.
 - **“Make the earlier commit contain a state that isn't just a subset of the
   files.”** — for example, generated output must be recreated at that state.
   Read [Interpolate a change](references/interpolate.md) for the guarded
@@ -63,17 +63,16 @@ helper paths from this loaded `SKILL.md`, not from the repository being edited.
 "<skill-dir>/scripts/why-immutable" REVSET [REVSET ...]
 ```
 
-`why-immutable` reports, for each selected revision, whether it is immutable
-and which clause of the active `immutable_heads()` definition captures it,
-together with the bookmark or tag anchoring that clause. It is read-only.
-Run it before proposing a rebase, split, or placement against a named target,
-and run it again when jj refuses one.
+`why-immutable` reports whether each selected revision is immutable, which
+clause of the active `immutable_heads()` definition captures it, and the
+bookmark or tag anchoring that clause. It is read-only. Run it before
+proposing a rebase, split, or placement against a named target, and again
+when jj refuses one.
 
-When the capturing clause is the repository's own alias term rather than one
-of jj's builtins, the report says so and points at `knowledge`'s
-`rtfm revsets --search Aliases` and `rtfm config --search immutable_heads`.
-Read those before reporting what the guard protects; an alias name is not its
-definition.
+When the capturing clause is a repository alias rather than a jj builtin, the
+report says so and points at `knowledge`'s `rtfm revsets --search Aliases`
+and `rtfm config --search immutable_heads`. Read those before reporting what
+the guard protects — an alias name is not its definition.
 
 ```bash
 "<skill-dir>/scripts/interpolate"
