@@ -10,12 +10,12 @@ Nothing below needs them. Pick the tool from what is actually unwanted.
 | Uncommitted content in `@` | `jj --no-pager restore FILESET` | Restores those paths from the parent tree; the change and its description survive. Bare `jj restore` empties `@` entirely. |
 | A whole mutable change, **content included** | `jj --no-pager abandon -r REV` | **Destructive:** content is discarded (files leave disk too if the working copy sits on an empty child); descendants rebase onto its parents; bookmarks are deleted unless `--retain-bookmarks` moves them there. For unwanted work only — never to un-commit wanted work. |
 | A change **and everything built on it** | `jj --no-pager abandon -r 'REV::'` | Bare `abandon -r REV` keeps the descendants and rebases them down; the `REV::` range is what actually drops the subtree. |
-| A commit made too early — keep the work | `jj --no-pager edit @-` | See below. This is the uncommit; `abandon` is not. |
+| A commit made too early — keep the work | `jj --no-pager edit @-` | Confirm `@` is empty first (`jj --no-pager st`); if it holds unrelated edits they stay behind in their own change. See below. This is the uncommit; `abandon` is not. |
 | One file that should never have been in a commit | `jj --no-pager restore --into REV --from REV- PATH` | Rewrites `REV`'s tree for that path only; descendants rebase and keep their change IDs. |
 | One file put back the way an earlier revision had it | `jj --no-pager restore --from REV PATH` | Pulls that revision's version **into** the working copy. **Direction trap:** `--into REV` rewrites that historical commit instead; `--into` defaults to `@`, so name only `--from` unless rewriting history is the intent. |
 | A landed or otherwise immutable change | `jj --no-pager revert -r REV -A TIP` | Adds a new commit that reverses `REV`; the original stays. |
 | Content that no longer exists anywhere | `jj --no-pager evolog -r REV`, or read-only operation log | See below. |
-| A squash that folded work into the wrong commit | `jj --no-pager split -r WRONG_TARGET FILESET -m '...'` | Take the work back out by ordinary rewrite; see [Tidy the working copy](tidy.md) and [Place changes deliberately](placement.md). **Not** `jj undo`. |
+| A squash that folded work into the wrong commit | `jj --no-pager split -r WRONG_TARGET FILESET -m '...'` | Take the work back out by ordinary rewrite; see [Tidy the working copy](tidy.md) and [Place changes deliberately](placement.md). **Not** `jj undo`. If the squashed work never had a description of its own, ask the user for one rather than inventing a message. |
 
 ## Uncommitting
 
@@ -43,7 +43,18 @@ of one — opens a diff editor, unavailable here; split by fileset instead.
 A squash landing in the wrong commit is the most common reason agents reach
 for `jj undo` — never the right tool. Split it back out with the command in
 the table above; if the target is unclear, the read-only op log below shows
-what the squash did. Read [Tidy the working copy into the right
+what the squash did. The extracted half needs a description, and a squash
+destroys the source's message when the source was empty or undescribed — so
+if there is nothing to recover, ask the user what the work was rather than
+writing a plausible-sounding message for them.
+
+`-m ''` is available and does what it looks like: verified, it leaves a
+genuinely undescribed change — `description` is the empty string, the change
+matches `description(exact:"")`, and jj renders it as `(no description
+set)` — without opening an editor. That makes it the honest placeholder when
+a description is genuinely pending, but an undescribed change is also
+unpushable and auto-prunable when empty, so do not leave one behind as a
+finished result. Read [Tidy the working copy into the right
 commits](tidy.md) for which half of the split keeps the change ID and where
 the extracted work lands.
 
