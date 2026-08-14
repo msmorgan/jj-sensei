@@ -8,10 +8,34 @@ Nothing below needs them. Pick the tool from what is actually unwanted.
 | What is unwanted | Tool | Notes |
 |---|---|---|
 | Uncommitted content in `@` | `jj --no-pager restore FILESET` | Restores those paths from the parent tree; the change and its description survive. Bare `jj restore` empties `@` entirely. |
-| A whole mutable change | `jj --no-pager abandon -r REV` | Descendants rebase onto its parents. Bookmarks on it are deleted unless `--retain-bookmarks` moves them to the parents. |
+| A whole mutable change, **content included** | `jj --no-pager abandon -r REV` | **Destructive:** the change's content is discarded, and if the working copy sits on an empty child, the files leave the disk too. Descendants rebase onto its parents. Bookmarks on it are deleted unless `--retain-bookmarks` moves them to the parents. For unwanted work only — never to un-commit wanted work. |
+| A change **and everything built on it** | `jj --no-pager abandon -r 'REV::'` | Bare `abandon -r REV` keeps the descendants and rebases them down; the `REV::` range is what actually drops the subtree. |
+| A commit made too early — keep the work | `jj --no-pager edit @-` | See below. This is the uncommit; `abandon` is not. |
+| One file that should never have been in a commit | `jj --no-pager restore --into REV --from REV- PATH` | Rewrites `REV`'s tree for that path only; descendants rebase and keep their change IDs. |
 | A landed or otherwise immutable change | `jj --no-pager revert -r REV -A TIP` | Adds a new commit that reverses `REV`; the original stays. |
 | Content that no longer exists anywhere | `jj --no-pager evolog -r REV`, or read-only operation log | See below. |
 | A squash that folded work into the wrong commit | `jj --no-pager split -r WRONG_TARGET FILESET -m '...'` | Take the work back out by ordinary rewrite; see [Tidy the working copy](tidy.md) and [Place changes deliberately](placement.md). **Not** `jj undo`. |
+
+## Uncommitting
+
+A premature `jj commit` is not undone by abandoning anything. `jj --no-pager
+edit @-` moves the working copy back onto the change that was just committed:
+its content becomes working-copy changes again, its description survives, and
+the empty tip that `jj commit` created is auto-pruned on the way out. Verified
+consequence worth knowing: if the tip had picked up unrelated edits, those stay
+behind in their own change rather than being folded in — `jj --no-pager log`
+will show it, and `jj --no-pager edit` returns to it.
+
+`jj --no-pager squash --from @- --into @` reaches a similar place but is not
+the same operation: it *merges* the parent's diff into `@`, so unrelated
+working-copy edits end up in one change with the uncommitted work, and `@`
+inherits the parent's description because its own was empty. Prefer `edit @-`
+unless combining the two is the actual intent.
+
+Reaching for `jj abandon -r @-` here is the mistake this section exists to
+prevent. It discards the content outright — the files disappear from the
+working copy as well — and nothing about the command warns that the work was
+wanted.
 
 `jj restore` restores whole files, and `jj diffedit` — which would take only
 part of one — opens a diff editor and is therefore unavailable here; split by
