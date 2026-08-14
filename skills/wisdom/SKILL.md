@@ -23,7 +23,9 @@ Conventions for every invocation: put `--no-pager` immediately after `jj`;
 request `--git` when output will be diff-shaped; pass `-m` whenever a command
 could open a description editor (`describe`/`commit`/`squash`/`split`). On
 `jj squash`, `-u` (`--use-destination-message`) keeps the destination's
-existing description instead of prompting.
+existing description instead of prompting. `jj new` never opens an editor, so
+its `-m` is a convenience for describing the change up front, not an
+editor-avoidance requirement.
 
 ## Rules that bind every command
 
@@ -52,6 +54,11 @@ correct, not a failure.**
   -r '<name>'`. If not, say so and ask what was meant — don't invent it,
   substitute a similar name, or dig through history for something that
   resembles it.
+- *The user says "the branch" but the repo has no such bookmark — or no
+  bookmarks at all:* this is normal in jj, where lines of work are usually
+  anonymous. Resolve it by matching the description across `jj --no-pager log
+  -T builtin_log_oneline`, then **confirm the match with the user before
+  acting on it**. A description match is a hypothesis, not a referent.
 
 **`jj --no-pager bookmark list --all` and `jj --no-pager log` are the ground
 truth for refs.** There's no separate git layer underneath to double-check. If
@@ -61,7 +68,10 @@ a ref is not in jj's output, it does not exist.
 `::(immutable_heads() | root())` as immutable and refuses to rewrite it; by
 default that is `trunk() | tags() | untracked_remote_bookmarks()`. A repo may
 extend it, so read the active definition rather than assume: `jj --no-pager
-config get "revset-aliases.'immutable_heads()'"`.
+config get "revset-aliases.'immutable_heads()'"`. A repo that has never
+configured this still answers — `builtin_immutable_heads()` **is** the
+unmodified default, not a sign that something is missing. Only a definition
+naming something else has been customized.
 
 **The following operations and escape hatches are always strictly forbidden:**
 
