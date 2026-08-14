@@ -82,8 +82,13 @@ Every `FILESET` above is an expression, not a plain path list.
 | `root:"docs"` | workspace-relative prefix; `root-file:`, `root-glob:` follow |
 | `glob-i:"*.TXT"` | any glob pattern name plus `-i` matches case-insensitively |
 | `~x` | everything except `x` |
-| `x & y`, `x ~ y`, `x \| y` | intersection, difference, union — in that binding order |
+| `x & y`, `x ~ y` | intersection and difference — **equal** binding power, parsed left to right, so `x ~ y & z` means `(x ~ y) & z` |
+| `x \| y` | union — binds more weakly than both of the above |
 | `all()`, `none()` | everything, nothing |
+
+Parenthesize whenever `&` and `~` appear in the same expression. They do not
+nest the way the written order suggests, and the left-to-right reading is
+rarely the one intended: write `x ~ (y & z)` or `(x ~ y) & z` explicitly.
 
 Quotes inside the expression may be omitted only when the expression has no
 operators and no function calls, so `jj diff 'Foo Bar'` is fine but
