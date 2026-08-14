@@ -36,15 +36,22 @@ helper paths from this loaded `SKILL.md`, not from the repository being edited.
   branch point.” “Move this whole subtree.”** Read
   [Place changes deliberately](references/placement.md) for `-A`/`-B`/`-o`,
   naming one exact graph edge, and choosing which half of a split moves.
-- **“Find what introduced this.” “Rebuild all of that into a proper
-  series.”** Read [Reconstruct work with evolog](references/using-evolog.md)
+- **“Which change introduced this line / this function?”** Start with
+  `jj --no-pager file annotate PATH`, then read the attributed change's own
+  diff to confirm. Annotate names the change that **last touched** each line,
+  which is not always the one that introduced the symbol, so corroborate
+  before reporting. Widen with a revset when the file has moved or the symbol
+  predates it — see [Use templates without guessing](references/templates.md)
+  for `files()` and `description()` selection.
+- **“Rebuild all of that into a proper series.” “How did this change get to
+  this state?”** Read [Reconstruct work with evolog](references/using-evolog.md)
   to recover the ordered edits inside an oversized `@` and choose coherent
-  commit boundaries. For per-line attribution, `jj --no-pager file annotate
-  PATH` answers directly.
+  commit boundaries.
 - **“Check whether…” “Verify that…” “Which revisions/paths…”** — any moment
   that calls for reading state rather than changing it. Read
-  [Use templates without guessing](references/templates.md) for small,
-  composable, tested idioms that answer in one line instead of a full patch.
+  [Use templates without guessing](references/templates.md): it covers
+  **selecting** the revisions with revset predicates and ranges first, then
+  formatting them into the smallest view that answers the question.
 - **“Make the earlier commit contain a state that isn't just a subset of the
   files.”** — for example, generated output must be recreated at that state.
   Read [Interpolate a change](references/interpolate.md) for the guarded

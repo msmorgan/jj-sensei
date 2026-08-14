@@ -9,6 +9,43 @@ Do not invent template syntax. If an idiom below is insufficient, load the
 --search TERM` or `rtfd docs/templates --section HEADING`. Use `--full` only
 when the complete language reference is genuinely needed.
 
+## Select before you format
+
+A template cannot narrow *which* revisions are shown; `-r` does that. Most
+"which change …" questions are answered by the revset alone, with
+`builtin_log_oneline` as the whole format:
+
+| Predicate | Selects |
+|---|---|
+| `author(pattern)`, `mine()` | by author name or email; `mine()` is the current user |
+| `description(pattern)` | by description text |
+| `files(fileset)` | commits that modified matching paths |
+| `conflicts()` | commits with files in a conflicted state |
+| `empty()` | commits modifying no files |
+| `merges()` | merge commits |
+| `divergent()` | commits sharing a change ID with another |
+| `::x` / `x::` | ancestors / descendants of `x`, `x` included |
+| `x..y` | ancestors of `y` that are not ancestors of `x` |
+| `x::y` | descendants of `x` that are also ancestors of `y` |
+| `x & y`, `x ~ y`, `x \| y` | and, minus, or — `&` and `~` bind equally and parse left to right, `\|` weaker |
+
+String patterns default to **`glob:`**, which is why `description("timeout")`
+matches nothing: there are no wildcards in it. Say what is meant —
+`substring:"timeout"`, `glob:"*timeout*"`, `exact:"…"`, or `regex:"…"`, each
+with an optional `-i` suffix for case-insensitivity.
+
+A compound example, verified: which of my nonempty changes touched a path and
+mention a term?
+
+```bash
+jj --no-pager log -r 'mine() & ~empty() & files("src/parser.rs") & description(substring:"timeout")' -T builtin_log_oneline
+```
+
+Build these up one clause at a time and check the count as you go; a revset
+that silently selects nothing looks identical to one that found nothing. When a
+predicate is not listed above, load `knowledge` and read `rtfm revsets --search
+TERM` rather than guessing at a function name.
+
 ## Prefer the simplest sufficient view
 
 Use `builtin_log_oneline` for ordinary graph inspection. Use `jj diff
