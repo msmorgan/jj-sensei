@@ -62,6 +62,12 @@ together with the bookmark or tag anchoring that clause. It is read-only.
 Run it before proposing a rebase, split, or placement against a named target,
 and run it again when jj refuses one.
 
+When the capturing clause is the repository's own alias term rather than one
+of jj's builtins, the report says so and points at `knowledge`'s
+`rtfm revsets --search Aliases` and `rtfm config --search immutable_heads`.
+Read those before reporting what the guard protects; an alias name is not its
+definition.
+
 ```bash
 "<skill-dir>/scripts/interpolate"
 ```

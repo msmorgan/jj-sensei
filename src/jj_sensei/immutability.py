@@ -23,6 +23,14 @@ _ANCHOR_TEMPLATE = (
 )
 
 
+DECODE_HINT = (
+    "A clause above is this repository's own alias, not one of jj's builtins.\n"
+    "Decode it before acting on it: load the knowledge skill and read\n"
+    "`rtfm revsets --search Aliases` for [revset-aliases] syntax, and\n"
+    "`rtfm config --search immutable_heads` for what this setting means."
+)
+
+
 @dataclass(frozen=True)
 class Clause:
     """One top-level term of the active `immutable_heads()` definition."""
@@ -217,6 +225,7 @@ def explain(jj: Jj, revset: str, definition: str | None = None) -> list[Verdict]
 
 def render(definition: str, verdicts: list[Verdict]) -> str:
     lines = [f"immutable_heads() = {definition}", ""]
+    custom = False
     for verdict in verdicts:
         state = "immutable" if verdict.immutable else "mutable"
         summary = f"{verdict.change_id[:12]}  {state}"
@@ -225,12 +234,18 @@ def render(definition: str, verdicts: list[Verdict]) -> str:
         lines.append(summary)
         for capture in verdict.captures:
             lines.append(f"    captured by {capture.clause.label}")
+            custom = custom or capture.clause.origin is None
             for anchor in capture.anchors:
                 lines.append(f"        anchored at {anchor.label}")
         if verdict.immutable and not verdict.captures:
             lines.append("    captured by no named clause; the root commit is always immutable")
         for clause in verdict.unevaluated:
             lines.append(f"    could not evaluate {clause}")
+    if custom:
+        # A builtin clause explains itself; a repository's own alias term does
+        # not, and guessing at its meaning from its name is how guards get
+        # argued around.
+        lines.extend(["", DECODE_HINT])
     return "\n".join(lines)
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from jj_sensei.immutability import (
+    DECODE_HINT,
     active_definition,
     clauses,
     explain,
@@ -63,6 +64,9 @@ def test_explain_names_the_clause_and_anchor_of_an_immutable_revision(jj_repo):
     report = render("builtin_immutable_heads()", verdicts)
     assert "captured by tags() (via builtin_immutable_heads())" in report
     assert "v1.0.0" in report
+    # A builtin clause is self-explanatory, so the decode pointer stays out of
+    # the way.
+    assert DECODE_HINT not in report
 
 
 def test_explain_attributes_a_custom_clause_separately(jj_repo):
@@ -85,6 +89,10 @@ def test_explain_attributes_a_custom_clause_separately(jj_repo):
     ]
     assert verdicts[0].captures[0].clause.origin is None
     assert verdicts[0].unevaluated == ()
+
+    report = render(definition, verdicts)
+    assert DECODE_HINT in report
+    assert "rtfm revsets --search Aliases" in report
 
 
 def test_explain_reports_a_clause_it_cannot_evaluate_without_failing(jj_repo):
