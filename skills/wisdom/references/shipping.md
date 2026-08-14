@@ -69,6 +69,27 @@ jj --no-pager rebase -r 'main..@' -A main
 untracked, so a colleague's branch fetched later always needs `bookmark
 track` before it is usable as a local name.
 
+Fetching also prunes: commits no longer reachable from any branch on the
+remote are treated as abandoned there and abandoned locally to match, unless
+`git.abandon-unreachable-commits` is set to `false`. A force-push by someone
+else can therefore remove local commits on the next fetch.
+
+## More than one remote
+
+jj does **not** infer the remote from tracking. `jj help git push` states it
+outright: "Unlike in Git, the remote to push to is not derived from the tracked
+remote bookmarks. Use `--remote` to select the remote Git repository by name.
+There is no option to push to multiple remotes." Without `--remote` it falls
+back to the `git.push` setting, then to a remote literally named `origin`.
+
+So pass `--remote NAME` whenever the repository has more than one remote or the
+user named one, and push each remote separately:
+
+```bash
+jj --no-pager git remote list
+jj --no-pager git push --remote upstream -b feature
+```
+
 ## When a bookmark shows `??`
 
 `main??` in `jj log`, and `main (conflicted):` in `jj bookmark list --all`,
@@ -125,6 +146,54 @@ what "land this on `feature`" asks for. It needs asking when the bookmark
 would move sideways or backwards, when the move would rewrite what a remote
 already has, or when the work was merely *started* from the bookmark. Do not
 infer that a bookmark should move because work began there.
+
+Once the decision is made, name the target explicitly:
+
+```bash
+jj --no-pager bookmark set main -r @-        # to one named revision
+jj --no-pager bookmark move main --to @-     # same effect, refuses to create
+```
+
+`jj bookmark advance --to REV` is the shorthand: it moves the *closest*
+bookmarks at or below the target up to it — by default those selected by
+`heads(::to & bookmarks())` — so with one bookmark below `@` it does the
+obvious thing, and with several it may move one you did not have in mind.
+Naming bookmarks positionally (`jj bookmark advance main --to @-`) restricts it
+to those. Check the result with `jj --no-pager bookmark list` before pushing.
+
+## Renaming and deleting
+
+Deleting a bookmark and forgetting one are different operations, and only one
+of them reaches the remote:
+
+```bash
+jj --no-pager bookmark delete feature      # then push to propagate
+jj --no-pager git push -b feature          # sends `[delete from <hash>]`
+```
+
+`jj bookmark delete` marks the deletion to be pushed; the remote bookmark
+survives until that push runs. Verify with `jj --no-pager git push -b feature
+--dry-run`, which reports `bookmark: feature [delete from <hash>]`. Deleting a
+bookmark does **not** abandon the revisions it pointed at.
+
+`jj bookmark forget NAME` only unregisters the name locally and is never
+propagated — any corresponding remote bookmarks simply become untracked, so
+the branch stays on the remote. Use it to stop tracking something, never to
+delete it.
+
+Renaming is local in the same way, so the remote needs both halves:
+
+```bash
+jj --no-pager bookmark rename old-name new-name
+jj --no-pager git push -b new-name -b old-name
+```
+
+The old name has to be pushed too, or the remote keeps a branch under the old
+name forever. If the old name was never pushed, pushing the new one is enough.
+
+Tags delete locally with `jj --no-pager tag delete NAME`, which likewise does
+not abandon the tagged revisions — and, as below, does not reach the remote at
+all, since this jj publishes no tags.
 
 ## Tags
 
