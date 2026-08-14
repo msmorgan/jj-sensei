@@ -15,7 +15,12 @@ helper paths from this loaded `SKILL.md`, not from the repository being edited.
   [Tidy the working copy into the right commits](references/tidy.md) for
   `absorb`, explicit `squash`, the repeated-split recipe, fileset syntax, and
   which rebase flag selects what.
-- **“Undo that.” “Take that change back out.” “I lost some work.”** Read
+- **“Apply that fix from the other branch here too.” “Cherry-pick that.”**
+  Read [Place changes deliberately](references/placement.md) — `jj duplicate`
+  takes the same `-o`/`-A`/`-B` placement flags, and without one it copies
+  onto the *original's* parents instead of onto your line.
+- **“Undo that.” “Take that change back out.” “That squash went into the
+  wrong commit.” “I lost some work.”** Read
   [Undo without operation-log surgery](references/undoing.md) for the choice
   among `restore`, `abandon`, `revert`, evolog, and the read-only operation
   log — and for what to do when jj refuses a target as immutable.
@@ -23,6 +28,10 @@ helper paths from this loaded `SKILL.md`, not from the repository being edited.
   review.”** Read [Publish and land work](references/shipping.md) for
   bookmark placement, pushing and auto-tracking, the fetch-and-track
   lifecycle, and the tag limitation.
+- **“My bookmark shows `??` / question marks.”** Read
+  [Publish and land work](references/shipping.md) — its conflicted-bookmark
+  section covers what `??` means and why clearing it the obvious way silently
+  drops the other side.
 - **“Move that commit before this one.” “Reorder these.” “Put it on that
   branch point.” “Move this whole subtree.”** Read
   [Place changes deliberately](references/placement.md) for `-A`/`-B`/`-o`,

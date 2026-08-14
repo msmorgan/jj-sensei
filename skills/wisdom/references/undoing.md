@@ -11,9 +11,26 @@ Nothing below needs them. Pick the tool from what is actually unwanted.
 | A whole mutable change | `jj --no-pager abandon -r REV` | Descendants rebase onto its parents. Bookmarks on it are deleted unless `--retain-bookmarks` moves them to the parents. |
 | A landed or otherwise immutable change | `jj --no-pager revert -r REV -A TIP` | Adds a new commit that reverses `REV`; the original stays. |
 | Content that no longer exists anywhere | `jj --no-pager evolog -r REV`, or read-only operation log | See below. |
+| A squash that folded work into the wrong commit | `jj --no-pager split -r WRONG_TARGET FILESET -m '...'` | Take the work back out by ordinary rewrite; see [Tidy the working copy](tidy.md) and [Place changes deliberately](placement.md). **Not** `jj undo`. |
 
-`jj restore` restores whole files. Use `jj diffedit` when only part of a file
-should come back.
+`jj restore` restores whole files, and `jj diffedit` — which would take only
+part of one — opens a diff editor and is therefore unavailable here; split by
+fileset instead.
+
+A squash that landed in the wrong commit is the most common reason agents
+reach for `jj undo`, and it is never the right tool. The squash is an ordinary
+rewrite and comes back out as one: `jj --no-pager split -r WRONG_TARGET
+FILESET -m '<description for the extracted work>'` separates it again, and the
+op log — read-only — shows exactly what the squash did if the target is
+unclear:
+
+```bash
+jj --no-pager op log
+jj --no-pager op show OP_ID
+```
+
+Read [Tidy the working copy into the right commits](tidy.md) for which half of
+the split keeps the change ID and where the extracted work lands.
 
 ## Reverting immutable work
 

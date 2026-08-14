@@ -69,6 +69,54 @@ jj --no-pager rebase -r 'main..@' -A main
 untracked, so a colleague's branch fetched later always needs `bookmark
 track` before it is usable as a local name.
 
+## When a bookmark shows `??`
+
+`main??` in `jj log`, and `main (conflicted):` in `jj bookmark list --all`,
+mean the bookmark is *tracked* and both ends moved from a common base — local
+`main` advanced to one commit, `main@origin` to another, and the fetch could
+not reconcile them:
+
+```text
+main (conflicted):
+  - nuksvuvu e45b3ffa init
+  + zktnryzs f315a667 local work on main
+  + luzozstn f323a372 remote work on main
+```
+
+The `-` line is the base; each `+` line is a side. jj's own hint says to run
+`jj bookmark set <name> -r <rev>`, and that does clear the markers — but it
+resolves the *bookmark* without reconciling the *work*. Naming the local side
+discards the remote commit, which the push preflight reports plainly:
+
+```text
+bookmark: main [move sideways from 8ba2aa7bfa8f to 7aa879ce03bc]
+```
+
+`move sideways` means the remote is being moved off a commit that is not an
+ancestor of the new target — a force push that drops whatever was there.
+
+The safe resolution reconciles the content instead. Rebase the local commit
+onto the remote head; the bookmark follows the rewritten commit on its own, so
+no second `bookmark set` is needed, and the two sides stop diverging because
+one becomes an ancestor of the other:
+
+```bash
+jj --no-pager rebase -r LOCAL_CHANGE -o main@origin
+jj --no-pager bookmark list --all          # no longer conflicted
+jj --no-pager git push -b main --dry-run
+```
+
+That dry-run must report `move forward`:
+
+```text
+bookmark: main [move forward from 8ba2aa7bfa8f to 1fb830be0e1f]
+```
+
+Check the vocabulary before every push that follows a conflict. `move forward`
+is a fast-forward and loses nothing; `move sideways` needs the user's explicit
+agreement about what is being dropped, and is never something to run because
+it made the `??` go away.
+
 ## Advancing a bookmark after landing work
 
 Moving a bookmark forward is implied when the task was to add commits to a
