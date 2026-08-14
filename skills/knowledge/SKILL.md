@@ -11,6 +11,8 @@ Resolve the helper from this loaded skill, not from the target repository:
 "<skill-dir>/scripts/rtfm" --list
 "<skill-dir>/scripts/rtfm" revsets
 "<skill-dir>/scripts/rtfm" revsets --search ancestors
+"<skill-dir>/scripts/rtfm" revsets --search Aliases
+"<skill-dir>/scripts/rtfm" config --search immutable_heads
 "<skill-dir>/scripts/rtfm" revsets --full
 "<skill-dir>/scripts/rtfm" rebase
 "<skill-dir>/scripts/rtfm" git push --full
@@ -21,6 +23,13 @@ Resolve the helper from this loaded skill, not from the target repository:
 "<skill-dir>/scripts/rtfd" --yaml-table docs/git-command-table.yml --search-git '(rebase|merge)'
 "<skill-dir>/scripts/rtfd" --yaml-table docs/git-command-table.yml --search-jj '(rebase|arrange)'
 ```
+
+A repository's own configuration is a common reason to reach for this skill.
+When a `jj config get` result is an unfamiliar revset alias, `rtfm revsets
+--search Aliases` gives the `[revset-aliases]` syntax the definition is written
+in, and `rtfm config --search immutable_heads` gives the documented meaning of
+that particular alias. Decode the definition from these rather than inferring
+it from its name.
 
 Use a help keyword for a language or conceptual topic. The installed jj lists
 the available keywords; common topics include `revsets`, `filesets`,
