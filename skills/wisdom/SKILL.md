@@ -1,6 +1,6 @@
 ---
 name: wisdom
-description: Route a Jujutsu history-shaping request to focused guidance or a guarded technique. Use when asked to move a fix into an earlier commit, split or reorder work, undo or revert something, recover lost content, publish or land work with bookmarks and tags, verify repository state compactly, or when jj refuses an operation as immutable.
+description: Route a Jujutsu history-shaping request to focused guidance or a guarded technique. Use when asked to move a fix into an earlier commit, split or reorder work, undo or revert something, uncommit, recover lost content, publish or land work with bookmarks and tags, verify repository state compactly, or when jj prints `??` after a bookmark name, reports a bookmark as `(conflicted)`, or refuses an operation as immutable.
 ---
 
 # Apply Jujutsu Wisdom

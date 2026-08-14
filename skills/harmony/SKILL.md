@@ -1,6 +1,6 @@
 ---
 name: harmony
-description: Harmonize stale workspace state, divergent working-copy successors, and file conflicts in Jujutsu; use when revision state needs a safe oldest-first repair or jj's default diff+snapshot markers need inspection. Never perform operation-log surgery.
+description: Harmonize stale workspace state, divergent working-copy successors, and file conflicts in Jujutsu. Use on jj's own output - `Error: The working copy is stale`, `(conflict)` on a revision, `×` in the log graph, `<<<<<<<` markers in a file, or `(divergent)` working copies - when revision state needs a safe oldest-first repair or jj's diff+snapshot markers need inspection. Never perform operation-log surgery.
 ---
 
 # Harmonize a jj Workspace
@@ -109,6 +109,17 @@ Use these only when the narrower diagnosis is already certain:
 "<skill-dir>/scripts/converge"  # divergence only
 "<skill-dir>/scripts/resolve"   # conflict walk only
 ```
+
+Convergence is scoped to divergent **working-copy successors** — the case
+where this workspace's own `@` was rewritten twice. A change that is divergent
+anywhere else in the graph, which jj prints as `(divergent)` with `/0` and `/1`
+suffixes on one change ID, is outside this helper. For those, load `knowledge`
+and read `rtfd docs/guides/divergence`; it documents four remedies — abandon
+the unwanted commit (addressing it by *commit* ID, since the change ID is
+ambiguous), `jj metaedit --update-change-id <commit-id>` to keep both versions
+under separate identities, squashing the two together, or leaving the
+divergence alone. Inspect both sides before choosing, and let the user pick
+when both hold real work.
 
 Convergence keeps the sole nonempty successor, or any one of byte-identical
 successors. A bookmark on the chosen keeper is left intact. If abandoning a
