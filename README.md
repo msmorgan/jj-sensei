@@ -34,8 +34,11 @@ A second hook shows a compact live status line at session start and after
 each file-writing or shell tool: workspace and working-copy change, a
 description and edit-volume summary, and conflicts, stale workspaces, and
 bookmarks on `@` made hard to miss. Post-tool probes eagerly snapshot
-agent-authored filesystem edits, but repeated context is suppressed until
-rendered state changes.
+agent-authored filesystem edits, suppressing repeated context until rendered
+state changes. Beyond ambient visibility, these eager snapshots continuously
+populate jj's evolution log (`jj evolog`), turning raw tool executions into an
+addressable patch-level trace that lets agents reconstruct clean commit series
+after the fact.
 
 Status and history-repair operations share one short workspace lock. The hook
 never repairs, unstales, or changes graph topology, and always lets the turn
