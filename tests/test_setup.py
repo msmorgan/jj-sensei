@@ -112,7 +112,10 @@ def test_setup_check_diagnoses_an_orphaned_workspace_without_forgetting_it(jj_re
     assert status == EXIT_HUMAN_REQUIRED
     assert "orphaned workspace registrations" in captured.err
     assert "dead" in captured.err
-    assert "No such file or directory" in captured.err
+    # jj's own diagnostic for the missing root is version-dependent — 0.43 gave
+    # an OS error, 0.44 gives none — so assert the row carries a reason, not its
+    # exact wording.
+    assert "  dead: " in captured.err
     assert "jj workspace forget dead" in captured.err
 
     still_registered = jj_repo.run(jj_repo.root, "workspace", "list").stdout

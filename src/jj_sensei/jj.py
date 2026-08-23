@@ -210,10 +210,12 @@ def parse_conflict_path(line: str) -> str:
 def parse_workspace(line: str) -> Workspace:
     """Read one `jj workspace list` row, tolerating an unresolvable root.
 
-    jj renders a missing workspace root as an inline `<Error: ...>` placeholder
-    and still exits 0, so the row parses as JSON only up to that property. The
-    name and commit ID before it are still trustworthy; recover them and
-    report the workspace as orphaned rather than losing the whole listing.
+    jj has rendered a missing workspace root two ways. Through 0.43 it emitted
+    an inline `<Error: ...>` placeholder and still exited 0, so the row parsed
+    as JSON only up to that property. Since 0.44 it emits an empty string,
+    which is valid JSON and would otherwise reach `Path("").resolve()` — the
+    process's working directory, which then collides with the real workspace
+    and makes `current_workspace` ambiguous. Both renderings mean orphaned.
     """
     try:
         item = json.loads(line)
@@ -230,6 +232,13 @@ def parse_workspace(line: str) -> Workspace:
             commit_id=item["commit_id"],
             root=None,
             root_error=line[cut + len(_ROOT_PROPERTY) :].removesuffix("}").strip(),
+        )
+    if not item["root"].strip():
+        return Workspace(
+            name=item["name"],
+            commit_id=item["commit_id"],
+            root=None,
+            root_error="jj could not resolve this workspace's root",
         )
     return Workspace(
         name=item["name"],

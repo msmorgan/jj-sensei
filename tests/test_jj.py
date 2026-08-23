@@ -32,6 +32,20 @@ def test_parse_workspace_salvages_a_row_whose_root_failed_to_resolve():
     assert "No such file or directory" in workspace.root_error
 
 
+def test_parse_workspace_treats_an_empty_root_as_orphaned():
+    """jj 0.44 renders an unresolvable root as `""` rather than `<Error: ...>`.
+
+    That is valid JSON, so it would reach `Path("").resolve()` — the working
+    directory — and collide with the workspace actually living there.
+    """
+    workspace = parse_workspace('{"name":"feature","commit_id":"abc","root":""}')
+
+    assert workspace.name == "feature"
+    assert workspace.commit_id == "abc"
+    assert workspace.root is None
+    assert workspace.orphaned is True
+
+
 def test_parse_workspace_still_refuses_a_row_it_cannot_read():
     with pytest.raises(RuntimeError):
         parse_workspace("not json at all")
