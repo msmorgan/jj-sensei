@@ -407,7 +407,8 @@ def test_auto_leaves_unsupported_marker_style(tmp_path):
 
 
 def _write_raw(path, text):
-    path.write_text(text, encoding="utf-8", newline="")
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        handle.write(text)
     return path
 
 
@@ -434,7 +435,9 @@ def test_resolution_does_not_reflow_a_form_feed(tmp_path):
     f = _write_raw(tmp_path / "imports.txt", source)
     r = _run("auto", str(f))
     assert r.returncode == 0, r.stderr
-    assert f.read_text(encoding="utf-8", newline="") == EXPECTED.replace(
+    with f.open(encoding="utf-8", newline="") as handle:
+        actual = handle.read()
+    assert actual == EXPECTED.replace(
         "import eee\n", "\x0cimport eee\n"
     )
 

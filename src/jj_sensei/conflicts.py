@@ -63,11 +63,13 @@ def _read_source(path):
     `newline=""` disables universal-newline translation, so a CRLF file stays
     CRLF instead of being silently rewritten to LF by the resolution round-trip.
     """
-    return path.read_text(encoding="utf-8", newline="")
+    with path.open(encoding="utf-8", newline="") as handle:
+        return handle.read()
 
 
 def _write_source(path, text):
-    return path.write_text(text, encoding="utf-8", newline="")
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        return handle.write(text)
 
 
 def _split_line(line):
