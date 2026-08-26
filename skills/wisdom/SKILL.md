@@ -30,8 +30,8 @@ editor-avoidance requirement.
 ## Rules that bind every command
 
 **You cannot drive an editor or terminal UI, so any command that opens one is
-unavailable:** interactive `split`/`squash` (`-i`, or `split` with no
-fileset), `diffedit`, `resolve` without `--tool`, `arrange`, `config edit`,
+unavailable:** interactive `split`/`squash`/`absorb` (`-i`, or `split` with
+no fileset), `diffedit`, `resolve` without `--tool`, `arrange`, `config edit`,
 and bare `describe`/`commit` without `-m`. Use non-interactive forms instead:
 a `FILESET` argument to `split`/`squash`, `-m`/`-u` for descriptions,
 hand-edited conflict markers for `resolve`, and `jj --no-pager config set

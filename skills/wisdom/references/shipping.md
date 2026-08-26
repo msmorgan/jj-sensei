@@ -113,6 +113,21 @@ jj --no-pager git remote list
 jj --no-pager git push --remote upstream -b feature
 ```
 
+Fetch has the same blind spot, and it is quieter: `jj help git fetch` says a
+bare fetch covers "the remotes specified by the `git.fetch` setting", and
+"if that is not configured and there are multiple remotes, the remote named
+`origin` will be used". So in a repo with a contributor's remote added
+alongside `origin`, a bare `jj git fetch` reporting `Nothing changed` has said
+nothing whatsoever about the contributor's remote — it never looked. Name the
+remotes, or sweep them all:
+
+```bash
+jj --no-pager git fetch --all-remotes
+jj --no-pager config set --repo git.fetch '["origin", "upstream"]'
+```
+
+`--remote` also takes a pattern here (`--remote '*'`), and can be repeated.
+
 ## When a bookmark shows `??`
 
 `main??` in `jj log`, and `main (conflicted):` in `jj bookmark list --all`,
@@ -221,9 +236,9 @@ The old name has to be pushed too, or the remote keeps a branch under it
 forever — unless it was never pushed, in which case pushing the new name is
 enough.
 
-Tags delete locally with `jj --no-pager tag delete NAME`, which likewise does
-not abandon the tagged revisions (see Tags below on why it never reaches the
-remote).
+Tags delete with `jj --no-pager tag delete NAME`, which likewise does not
+abandon the tagged revisions. Like a bookmark deletion, it reaches the remote
+only once pushed, and only for a tag that is tracked — see Tags below.
 
 ## Tags
 
@@ -239,14 +254,48 @@ question for the user rather than a flag to add: a tag that already points
 somewhere else usually means the release name is taken, and moving it
 rewrites what that name meant.
 
-This jj publishes no tags: `jj git push` has no tag option at all, pushing
-bookmarks only, so creating a tag locally never releases it. **There is no
-workaround, and looking for one is the failure.** Do not reach for `git push
-origin <tag>` — naming or planning a git command for this is itself the
-violation of the never-run-git rule, not a clever way around a jj gap. State
-the limitation and stop; that is the complete and correct plan.
+This jj **does** publish tags. `jj git push` takes `-t`/`--tag` alongside
+`-b`/`--bookmark`, and its own help says it "pushes tracking bookmarks and
+tags" by default, with `--all` covering "all bookmarks and tags (including new
+ones)":
 
-If the project needs something jj *can* push, a bookmark at the release
-revision is the honest alternative — but that is a change of plan the user
-has to agree to, since a bookmark is not a tag. Offer it as a question, never
-as a silent substitution.
+```bash
+jj --no-pager git push --remote origin -t v1.0.0 --dry-run
+jj --no-pager git push --remote origin -t v1.0.0
+```
+
+Dry-run first, for the same reason as a bookmark push: it prints the intended
+remote change without touching anything. Creating a tag locally still does not
+release it — the push is a separate, deliberate step — but the push exists.
+
+`--tag` tracks as a side effect: per `jj help git push`, "if a tag isn't
+tracking anything yet, the remote tag will be tracked automatically." That is
+the tag counterpart of the bookmark rule above, and it means a first push both
+publishes and starts tracking.
+
+Tags track like bookmarks, with their own subcommands:
+
+```bash
+jj --no-pager tag track v1.0.0@origin      # import as a local tag, follow future pulls
+jj --no-pager tag untrack v1.0.0@origin    # keep only a pointer to the last fetch
+```
+
+Tracking decides what you see and what you can delete. `jj tag list` includes a
+tracked remote tag only when its target differs from the local one, and hides
+untracked remote tags entirely; a tag that is both local and remote renders
+conflicted with `-` for old targets and `+` for new, exactly like a conflicted
+bookmark. Deletion runs through tracking too: `jj help git push` says of
+`--deleted` that "only tracked bookmarks and tags can be successfully deleted
+on the remote", and promises a warning when an untracked remote name has no
+local counterpart. Do not lean on that warning to notice a no-op — track the
+tag first, then delete and push, and confirm from the dry-run that the
+deletion is actually listed.
+
+What a fetch brings back is configurable per remote via
+`remotes.<name>.fetch-tags`, with `fetch-bookmarks` beside it. The fallback is
+keyed to the bookmark setting specifically: per `jj help git fetch`, "if
+`remotes.<name>.fetch-bookmarks` is not configured, the default fetch refspecs
+for the selected remotes are read from the Git configuration."
+
+None of this changes the never-run-git rule: `git push origin <tag>` stays
+forbidden, and it is now also unnecessary.
