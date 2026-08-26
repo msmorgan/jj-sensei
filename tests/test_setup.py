@@ -1,3 +1,5 @@
+import re
+
 from jj_sensei.jj import Jj
 from jj_sensei.repair import EXIT_HUMAN_REQUIRED
 from jj_sensei.setup import run_setup, workspace_overlaps
@@ -114,8 +116,11 @@ def test_setup_check_diagnoses_an_orphaned_workspace_without_forgetting_it(jj_re
     assert "dead" in captured.err
     # jj's own diagnostic for the missing root is version-dependent — 0.43 gave
     # an OS error, 0.44 gives none — so assert the row carries a reason, not its
-    # exact wording.
-    assert "  dead: " in captured.err
+    # exact wording. Pin that a usable reason is present instead: a bare
+    # substring check also passes when root_error is None and the row renders
+    # "  dead: None", which tells a reader nothing.
+    [reason] = re.findall(r"^  dead: (.*)$", captured.err, re.M)
+    assert reason.strip() not in ("", "None")
     assert "jj workspace forget dead" in captured.err
 
     still_registered = jj_repo.run(jj_repo.root, "workspace", "list").stdout
