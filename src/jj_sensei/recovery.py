@@ -18,7 +18,7 @@ _OPERATION_TEMPLATE = (
     "concat("
     "'{\"id\":', json(self.id().short(12)), "
     "',\"snapshot\":', json(self.snapshot()), "
-    "',\"time\":', json(self.time().end().format(\"%Y-%m-%d %H:%M:%S\")), "
+    '\',"time":\', json(self.time().end().format("%Y-%m-%d %H:%M:%S")), '
     "'}', \"\\n\")"
 )
 

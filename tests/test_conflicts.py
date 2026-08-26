@@ -437,9 +437,7 @@ def test_resolution_does_not_reflow_a_form_feed(tmp_path):
     assert r.returncode == 0, r.stderr
     with f.open(encoding="utf-8", newline="") as handle:
         actual = handle.read()
-    assert actual == EXPECTED.replace(
-        "import eee\n", "\x0cimport eee\n"
-    )
+    assert actual == EXPECTED.replace("import eee\n", "\x0cimport eee\n")
 
 
 def test_non_utf8_locale_still_reads_utf8_content(tmp_path):

@@ -123,9 +123,7 @@ class Jj:
             _WORKSPACE_TEMPLATE,
             ignore_working_copy=True,
         )
-        return [
-            parse_workspace(line) for line in result.stdout.splitlines() if line.strip()
-        ]
+        return [parse_workspace(line) for line in result.stdout.splitlines() if line.strip()]
 
     def current_workspace(self) -> Workspace:
         root = self.workspace_root()
