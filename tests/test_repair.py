@@ -333,6 +333,34 @@ def test_workspace_lock_times_out_while_held(tmp_path):
             pass
 
 
+def test_repair_handles_a_path_longer_than_the_padded_column(jj_repo):
+    """jj caps the path column at 32 characters and then writes one more space,
+    so a long path is separated from its description by a single space. Reading
+    the row on a run of spaces used to abort the whole repair."""
+    long_path = "a/very/deeply/nested/directory/tree/module.py"
+    assert len(long_path) >= 35
+
+    assert run_setup(jj_repo.root) == 0
+    feature = jj_repo.add_workspace("feature")
+
+    jj_repo.write(jj_repo.root, long_path, "trunk\n")
+    jj_repo.commit(jj_repo.root, "trunk adds a deeply nested module")
+    jj_repo.write(feature, long_path, "feature\n")
+    jj_repo.commit(feature, "feature adds the same module")
+    jj_repo.run(feature, "rebase", "-s", "roots(default@..@)", "-d", "default@-")
+
+    listing = Jj(feature).run("resolve", "--list").stdout
+    assert f"{long_path} 2-sided conflict" in listing, listing
+    assert Jj(feature).conflict_files() == [long_path]
+
+    assert run_repair(feature) == 1
+    assert StateStore(feature).load().phase == "editing"
+
+    jj_repo.write(feature, long_path, "feature\n")
+    assert run_repair(feature) == 0
+    assert Jj(feature).commits("::@ & conflicts()") == []
+
+
 def test_repair_handles_a_delete_modify_conflict(jj_repo):
     """`jj resolve --list` describes this one as "2-sided conflict including 1
     deletion". Reading the path back as a fixed word count yields a file that

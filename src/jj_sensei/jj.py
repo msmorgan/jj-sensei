@@ -11,9 +11,21 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _SAFE_REVISION = re.compile(r"^[a-z0-9]+$")
-# A non-greedy path plus a padding run lets the engine backtrack past any double
-# space inside the path itself until the description actually matches.
-_CONFLICT_ROW = re.compile(r"^(?P<path>.+?) {2,}\d+-sided conflict\b.*$")
+# jj pads the path column to `min(longest_path, 32) + 3` and then writes one
+# more space, so a path of 35 characters or more is separated from its
+# description by a *single* space. The separator is therefore no help in
+# locating the boundary, and a path may itself contain spaces — so spell the
+# description out in full and anchor it to the end of the line. A non-greedy
+# path then backtracks until what follows is a whole description rather than
+# something that merely starts like one.
+_CONFLICT_OBJECT = r"\d+ deletions?|an executable|a symlink|a directory|a git submodule"
+_CONFLICT_DESCRIPTION = (
+    r"\d+-sided conflict"
+    rf"(?: including (?:{_CONFLICT_OBJECT})"
+    rf"(?:, (?:{_CONFLICT_OBJECT}))*"
+    rf"(?: and (?:{_CONFLICT_OBJECT}))?)?"
+)
+_CONFLICT_ROW = re.compile(rf"^(?P<path>.+?) +(?:{_CONFLICT_DESCRIPTION})$")
 _COMMIT_TEMPLATE = (
     "concat("
     "'{\"change_id\":', json(change_id), "
@@ -193,11 +205,12 @@ class Jj:
 def parse_conflict_path(line: str) -> str:
     """Read the path out of one `jj resolve --list` row.
 
-    Rows are `PATH<padding>DESCRIPTION`, and the description is not a fixed
-    number of words — a delete/modify conflict reads "2-sided conflict
-    including 1 deletion". Splitting off a fixed word count silently produces a
-    path that does not exist, so anchor on the description and refuse anything
-    that does not match rather than guessing.
+    Rows are `PATH<padding>DESCRIPTION`, and neither half has a fixed shape: a
+    delete/modify conflict reads "2-sided conflict including 1 deletion", and
+    the padding collapses to a single space once the path reaches 35
+    characters. Splitting off a fixed word count, or on a run of spaces,
+    silently produces a path that does not exist, so match the description in
+    full and refuse anything that does not match rather than guessing.
     """
     match = _CONFLICT_ROW.match(line)
     if match is None:
