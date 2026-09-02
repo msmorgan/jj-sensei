@@ -210,7 +210,12 @@ resolver automatically; preview or run it directly:
 ```
 
 `auto` leaves everything it cannot prove safe untouched. Read its summary;
-remaining conflicts are not an execution failure.
+remaining conflicts are not an execution failure. It refuses generated files
+(`*.lock`, `package-lock.json`, `go.sum`) outright — regenerate those from
+their manifest instead of merging them — and it declines any hunk where merging
+would drop a line that already appears nearby, because record-structured text
+repeats lines like `[[package]]` meaningfully. A `✓` means the lines merged
+safely, not that the result is correct: read `jj --no-pager diff --git`.
 
 After resolving, inspect the Git-shaped diff and run project tests:
 

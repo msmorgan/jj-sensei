@@ -326,16 +326,22 @@ def _sorted_merge_resolution(hunk, lines):
     if len(run) < 3:
         return None, f"sorted run too short ({len(run)} < 3)"
 
-    # 4. Merge run + new adds (dedup new lines only), re-sort. Existing run lines
-    #    are preserved as-is; an add equal to an existing/other-side line is kept once.
-    merged = list(run)
-    seen = set(run)
-    for a in adds:
-        if a not in seen:
-            merged.append(a)
-            seen.add(a)
-    merged.sort()
+    # 4. Merge run + new adds, re-sort. Dropping an added line that already
+    #    appears elsewhere is only sound if identical lines are interchangeable.
+    #    That holds for a sorted list — a repeated import or allowlist entry is
+    #    genuinely redundant — and fails for record-structured text, where
+    #    `[[package]]` occurs once per record and `version = "0.0.0"` once per
+    #    unversioned crate. A run being sorted is evidence of a list, not proof,
+    #    so decline instead of deduping. Nothing is lost on a genuine list: there
+    #    a colliding add is a no-op, so the declined resolution was a no-op too.
+    #    The one dedup that stays is both sides making the *same* addition.
+    kept = x_adds if Counter(x_adds) == Counter(y_adds) else adds
+    if len(set(kept)) != len(kept):
+        return None, "sides add overlapping lines (not a sorted list)"
+    if set(kept) & set(run):
+        return None, "addition already present in the run (not a sorted list)"
 
+    merged = sorted(run + kept)
     new_virtual = virtual[:lo] + merged + virtual[hi:]
     return new_virtual, len(merged) - len(run)
 
@@ -356,6 +362,19 @@ def _resolve_path(filepath):
         if candidate.exists():
             return candidate
     return None
+
+
+# Merging is never the right resolution for a file derived from a manifest: the
+# answer is to regenerate it. Names, not contents, because a half-merged lockfile
+# is indistinguishable from a hand-written sorted list.
+_GENERATED_NAMES = frozenset(
+    {"package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "bun.lockb", "go.sum"}
+)
+
+
+def _is_generated(path):
+    name = Path(path).name
+    return name.endswith(".lock") or name in _GENERATED_NAMES
 
 
 def _resolve_targets(files):
@@ -453,7 +472,7 @@ def cmd_accept(args):
         return 1
     if side == "sort":
         resolved, left = _auto_resolve_file(path, filepath, dry=False)
-        print(f"  ---\n  resolved {resolved} hunk(s), {left} left for review")
+        _auto_summary(resolved, left, dry=False)
         return 0
     hunks, lines = parse_file(path)
     if not hunks:
@@ -503,6 +522,15 @@ def cmd_accept(args):
     return 1 if skipped else 0
 
 
+def _auto_summary(resolved, left, dry):
+    print("  ---")
+    suffix = " (dry-run, nothing written)" if dry else ""
+    print(f"  resolved {resolved} hunk(s), {left} left for review{suffix}")
+    if resolved:
+        # The guards prove the lines merge, not that the merge means anything.
+        print("  A ✓ means the lines merged safely, not that the result is right — read the diff.")
+
+
 def _report(filepath, hunk, status, msg):
     label = "sorted-merge ✓" if status == "ok" else "left"
     print(f"  {filepath} hunk {hunk['hunk']}/{hunk['total']}: {label} ({msg})")
@@ -510,6 +538,9 @@ def _report(filepath, hunk, status, msg):
 
 def _auto_resolve_file(path, filepath, dry):
     """Resolve every qualifying hunk in one file. Returns (resolved, left)."""
+    if _is_generated(path):
+        print(f"  {filepath}: left (generated file — regenerate it from its manifest)")
+        return 0, 1
     resolved = left = 0
     declined = set()  # raw-text signatures of hunks we've already left
     while True:
@@ -553,9 +584,7 @@ def cmd_auto(args):
         resolved, left = _auto_resolve_file(path, filepath, dry)
         total_resolved += resolved
         total_left += left
-    print("  ---")
-    suffix = " (dry-run, nothing written)" if dry else ""
-    print(f"  resolved {total_resolved} hunk(s), {total_left} left for review{suffix}")
+    _auto_summary(total_resolved, total_left, dry)
     # Hunks left for review are the conservative outcome, not a failure.
     return 0
 
@@ -613,7 +642,8 @@ def parser():
         help="merge provably safe sorted-list additions",
         description=(
             "Conservatively merge two pure additions into an existing sorted run of at least "
-            "three lines. Leave every unproven hunk untouched."
+            "three lines. Leave every unproven hunk untouched, and never merge a generated "
+            "file such as *.lock, package-lock.json or go.sum."
         ),
     )
     auto.add_argument(
