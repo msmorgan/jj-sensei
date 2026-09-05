@@ -125,7 +125,9 @@ Because the live-status hook snapshots after agent tools, `wisdom` can use
 `jj evolog` to recover the ordered patches inside an oversized `@` and
 rebuild them into a coherent commit series. The snapshots preserve execution
 history; the agent still chooses semantic boundaries, not every tool call as
-a commit.
+a commit. The same snapshots let it roll a described change back to an earlier
+version of itself with one scoped `jj restore --from SNAPSHOT --into CHANGE
+PATH`, instead of restoring a whole tree and rebasing onto it.
 
 Its guarded escape hatch is interpolation: turning one mixed change into two
 by constructing an intermediate state between them when that isn't a matter

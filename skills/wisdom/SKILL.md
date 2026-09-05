@@ -134,6 +134,7 @@ Common Git reflexes answered inline; anything with a trap is routed.
 | push, fetch, bookmarks, tags, landing work | [Publish and land work](references/shipping.md) |
 | check state, select revisions, build a compact view | [Use templates without guessing](references/templates.md) |
 | reconstruct an oversized `@` into a series | [Reconstruct work with evolog](references/using-evolog.md) |
+| roll a change back to an earlier version of itself, undo part of an amend | [Reconstruct work with evolog](references/using-evolog.md), section "Restore a change to one of its own snapshots" |
 | build an intermediate state selection cannot express | [Interpolate a change](references/interpolate.md) |
 | conflicts, stale workspace, divergence, recover a file from a snapshot | `harmony` skill |
 | add or audit a workspace, multi-workspace immutability | `boundaries` skill |

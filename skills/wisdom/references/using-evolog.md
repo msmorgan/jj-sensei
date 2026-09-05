@@ -57,21 +57,26 @@ Reconstruct the series from oldest boundary to newest: ordinary `jj split`
 with an explicit fileset for a files-only boundary; when a boundary is best
 represented by one historical tree and its parent context is still
 compatible, use [interpolation](interpolate.md) to insert the lower commit,
-then restore that evolog snapshot while the helper waits for the
-intermediate state:
+then restore the relevant paths from that evolog snapshot while the helper
+waits for the intermediate state:
 
 ```bash
 "<skill-dir>/scripts/interpolate" begin -A '@-' -B '@' -m 'earlier change'
-jj --no-pager restore --from EVOLUTION_COMMIT_ID
+jj --no-pager restore --from EVOLUTION_COMMIT_ID FILESET
 jj --no-pager diff --git
 "<skill-dir>/scripts/interpolate" finish
 ```
 
+Always name a `FILESET`: without one, `restore --from` copies the snapshot's
+**entire tree** into the working copy, so every path that differs between the
+snapshot and the current state — including files the boundary was never meant
+to touch — silently changes. Limit it to the paths the boundary owns.
+
 Repeat with later checkpoints. If the historical version was based on
-different parent content, restoring its whole tree may reintroduce unrelated
-base changes — use the normalized evolog patches as evidence instead, and
-construct only the intended content rather than restoring the snapshot
-wholesale.
+different parent content, even a scoped restore may reintroduce unrelated
+base changes in those paths — use the normalized evolog patches as evidence
+instead, and construct only the intended content rather than restoring the
+snapshot wholesale.
 
 After reconstruction, compare the final tree with the original recorded commit
 ID; the diff must be empty:
@@ -84,3 +89,45 @@ Review every resulting change and run the relevant tests: evolog supplies the
 evidence, but semantic commit boundaries still require judgment. This workflow
 reads historical versions and performs ordinary history rewrites — it never
 requires operation-log surgery.
+
+## Restore a change to one of its own snapshots
+
+Use this when a described change has been amended with content it should not
+carry — a refactor that got snapshotted into it, an experiment that stayed —
+and the goal is "put `CHANGE` back the way it was at an earlier point". The
+evolog holds every earlier version of the change; restore the affected paths
+from one of them **into the change itself**.
+
+```bash
+jj --no-pager evolog -r CHANGE --no-graph \
+  -T 'commit.commit_id().short() ++ " " ++ operation.time().start().format("%H:%M") ++ "\n"'
+jj --no-pager file list -r SNAPSHOT            # confirm the snapshot has what you want
+jj --no-pager file show -r SNAPSHOT PATH        # or read it
+jj --no-pager restore --from SNAPSHOT --into CHANGE PATH...
+jj --no-pager diff -r CHANGE --stat             # the change now carries the old content
+```
+
+`SNAPSHOT` is a commit ID from the evolog listing (in an evolog template the
+commit is reached as `commit.commit_id()`; bare `commit_id` is not a keyword
+there). `--into CHANGE` is the correct direction for this case: it rewrites
+that change's tree for the named paths only, its description and change ID
+survive, and descendants rebase. The [undo table](undoing.md) row for the
+same command points here.
+
+Two things this recipe never does:
+
+- **Restore without a `FILESET`.** `restore --from SNAPSHOT` with no paths
+  copies the snapshot's entire tree into the destination, so every path that
+  differs — including work from other lines that happened to be in the tree
+  at the time — changes with it.
+- **Restore the old tree somewhere else and rebase `CHANGE` onto it.**
+  `jj new BASE && jj restore --from SNAPSHOT && jj rebase -r CHANGE -d @`
+  looks like a rollback but is not: rebasing `CHANGE` re-applies `CHANGE`'s
+  own diff on top of the copy, so the unwanted content comes straight back,
+  usually with conflicts and the whole-tree leak from the first point on top.
+  One scoped `restore --from SNAPSHOT --into CHANGE PATH` is the entire
+  operation.
+
+The parent caveat above still applies: a snapshot taken on a different parent
+can carry that parent's content in the restored paths, so check `file show`
+output before restoring rather than trusting the timestamp alone.
