@@ -109,6 +109,7 @@ Trust the output token over the user's phrasing.
 | `(divergent)`, or a change ID with a `/0`/`/1` suffix | `harmony` if it is a diverged working copy, else `knowledge` for `rtfd docs/guides/divergence` |
 | An immutability refusal | [Undo without operation-log surgery](references/undoing.md), triage section |
 | `[updated] untracked` after a fetch | [Publish and land work](references/shipping.md) |
+| `Refused to snapshot some files`, or a `?` path under `Untracked paths:` | The file exceeds `snapshot.max-new-file-size` or is excluded by `snapshot.auto-track`. If it belongs in history: `jj --no-pager file track --include-ignored PATH`. Otherwise leave it, or add it to `.gitignore` to silence the warning |
 | An unfamiliar revset alias from `config get` | `knowledge` skill |
 
 ## Route on what was asked
@@ -118,7 +119,8 @@ Common Git reflexes answered inline; anything with a trap is routed.
 | The request | Answer or destination |
 |---|---|
 | status / diff / log | `jj --no-pager st`; `jj --no-pager diff --git`; `jj --no-pager log -r ::@ -n 5 -T builtin_log_oneline` |
-| stage a file (`git add`) | Nothing to do — every command snapshots all unignored edits |
+| stage a file (`git add`) | Nothing to do — every command snapshots all unignored edits under the size limit |
+| force-add an ignored or oversized file (`git add -f`) | `jj --no-pager file track --include-ignored PATH` — without the flag, `file track` silently skips ignored paths and refuses oversized ones |
 | commit everything | `jj --no-pager commit -m "..."` — describes `@`, then creates a fresh empty child |
 | commit only some paths | `jj --no-pager commit FILESET -m "..."` — see [Tidy the working copy](references/tidy.md) |
 | stash / unstash | Nothing to stash: `jj --no-pager new <base> -m "..."` for the interruption, `jj --no-pager edit <wip>` to return; the WIP change stays put as a sibling |
