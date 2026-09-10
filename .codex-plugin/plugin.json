@@ -1,6 +1,6 @@
 {
   "name": "jj-sensei",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Jujutsu startup fluency, live status, installed help, guarded history shaping, workspace isolation, and resumable repair",
   "author": {
     "name": "Michael Morgan",
