@@ -52,6 +52,13 @@ begins at the `wisdom` hub, which answers directly or routes onward —
 repository trouble to `harmony`, multi-workspace safety to `boundaries`, and
 anything still unresolved to `knowledge`.
 
+All four skills declare `metadata.kind: reference` in their `SKILL.md`
+frontmatter. This is a catalog convention for cost attribution; it does not
+change host behavior or telemetry. Dashboards should attribute a skill’s own
+turn, or estimate the cost of its resident tokens across subsequent turns,
+rather than charge it for all work after it loads. Dashboard aggregation must
+explicitly adopt this convention for attribution to change.
+
 ### knowledge
 
 `knowledge` is the fallback: load it whenever a question about jj usage

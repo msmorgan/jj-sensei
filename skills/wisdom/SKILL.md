@@ -1,6 +1,8 @@
 ---
 name: wisdom
 description: The jj-sensei hub. Load before ANY version control command in a Jujutsu repo, including trivial ones. Carries jj's model, the always-binding safety rules, and routing to every reference and to the knowledge, harmony, and boundaries skills. Use for any Git-reflex translation, history-shaping request, or unexplained jj output token.
+metadata:
+  kind: reference
 ---
 
 # Jujutsu: the hub

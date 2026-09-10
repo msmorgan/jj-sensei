@@ -1,6 +1,8 @@
 ---
 name: knowledge
 description: The fallback for unresolved jj questions. Load whenever an agent still has questions about jj usage that jj-sensei's own guidance and references did not answer - unknown commands, uncertain flags or semantics, revsets, filesets, templates, configuration, bookmarks, glossary terms, workspaces, or Git interop - and read the authoritative help and manual pages matching the installed Jujutsu version.
+metadata:
+  kind: reference
 ---
 
 # Read the Installed jj Manual

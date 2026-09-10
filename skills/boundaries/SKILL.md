@@ -1,6 +1,8 @@
 ---
 name: boundaries
 description: Install or audit jj-sensei's repository-level immutable_heads configuration for safe multi-workspace isolation. Use when asked to set up, initialize, upgrade, verify, or troubleshoot jj-sensei workspace protection.
+metadata:
+  kind: reference
 ---
 
 # Set Up jj Workspace Isolation

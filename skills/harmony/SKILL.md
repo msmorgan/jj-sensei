@@ -1,6 +1,9 @@
 ---
 name: harmony
-description: Harmonize stale workspace state, divergent working-copy successors, and file conflicts in Jujutsu. Use on jj's own output - `Error: The working copy is stale`, `(conflict)` on a revision, `×` in the log graph, `<<<<<<<` markers in a file, or `(divergent)` working copies - when revision state needs a safe oldest-first repair or jj's diff+snapshot markers need inspection. Never perform operation-log surgery.
+description: >-
+  Harmonize stale workspace state, divergent working-copy successors, and file conflicts in Jujutsu. Use on jj's own output - `Error: The working copy is stale`, `(conflict)` on a revision, `×` in the log graph, `<<<<<<<` markers in a file, or `(divergent)` working copies - when revision state needs a safe oldest-first repair or jj's diff+snapshot markers need inspection. Never perform operation-log surgery.
+metadata:
+  kind: reference
 ---
 
 # Harmonize a jj Workspace
