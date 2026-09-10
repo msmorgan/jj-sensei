@@ -50,12 +50,13 @@ TERM` rather than guessing at a function name.
 
 Inspect in widening steps and stop at the one that answers the question.
 Identity and shape first: `jj --no-pager log -r '<revset>' -T
-builtin_log_oneline`. Then volume: `jj diff --stat`, or `--summary` for
-changed paths — bare `jj diff` compares `@` against its *merged* parent tree,
-which is what you want when `@` is a merge. Then content, scoped: `jj diff --git <paths>`. Read a full
-`jj show --git <rev>` only when the complete patch is required. A template earns its keep when several facts belong on each log
+builtin_log_oneline`. Then volume: `jj --no-pager diff --stat`, or `--summary`
+for changed paths — bare `jj --no-pager diff` compares `@` against its
+*merged* parent tree, which is what you want when `@` is a merge. Then content,
+scoped: `jj --no-pager diff --git <paths>`. Read a full `jj --no-pager show
+--git <rev>` only when the complete patch is required. A template earns its keep when several facts belong on each log
 row, a list needs transforming, or output must be machine-readable. An
-unscoped `jj show --git` is not a discovery tool for an unknown or
+unscoped `jj --no-pager show --git` is not a discovery tool for an unknown or
 potentially large change.
 
 Start a custom template against one revision, then widen the revset after its

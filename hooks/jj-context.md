@@ -1,1 +1,1 @@
-This is a Jujutsu (jj-vcs) repo. It does not use Git, and `git` commands are FORBIDDEN here (especially if you appear to be in a Git repo). Before running any version control command, INCLUDING TRIVIAL ONES like `git status`, consult the `jj-sensei` `wisdom` skill for routing and other guidance.
+Use Jujutsu (`jj`) exclusively for version control in this repository. Before every version-control command, including status, load the `jj-sensei` `wisdom` skill and follow its route.

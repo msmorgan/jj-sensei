@@ -14,17 +14,17 @@ Agents still use the real `jj` CLI and learn its native model.
 ## What it does automatically
 
 When a session starts anywhere beneath a `.jj/` directory, jj-sensei injects
-a three-sentence preamble — in Antigravity, only before the first model
-invocation. It says three things: this is a Jujutsu repo, `git` commands are
-forbidden here, and before running any version control command — including a
-reflexive `git status` — load the `wisdom` skill.
+a one-line preamble — in Antigravity, only before the first model invocation.
+It positively names `jj` as the repository's exclusive version-control tool
+and routes every version-control command — including status — through the
+`wisdom` skill.
 
 Everything else is pulled on demand rather than pushed into every session.
 `wisdom` is the hub an agent lands on: jj's model in a paragraph, the rules
-that bind every command, a table of contents for the references, and two
-routing tables — one keyed on what jj printed, one on what was asked. Common
-Git reflexes are answered inline there in a line; anything carrying a trap
-routes to the reference that owns it.
+that bind every command, and two routing tables — one keyed on what jj printed,
+one on what was asked. Common Git reflexes are answered inline there in a
+line; anything carrying a trap routes to the smallest sufficient reference
+set.
 
 The repository detector only examines parent directories and deliberately
 never invokes jj, since even a read-looking jj command can synchronize a
@@ -75,9 +75,10 @@ docs-only copies can carry a `.jj-version` sidecar.
 ### harmony
 
 `harmony` handles messy states that otherwise become long, fragile runbooks:
-stale workspaces, divergent working-copy successors, and file conflicts. Its
-one-stop repair command updates stale state, converges only equivalent
-divergence, and walks mutable conflicts oldest to newest.
+stale workspaces, divergent working-copy successors, and file conflicts. A
+compact diagnosis router discloses only the affected branch. Its one-stop
+repair command updates stale state, converges only equivalent divergence, and
+walks mutable conflicts oldest to newest.
 
 Repair is locked and crash-resumable: it journals completed transitions,
 automates only resolutions it can establish are safe, and pauses with a
@@ -99,8 +100,9 @@ permission.
 
 `wisdom` is the hub. It carries jj's model, the always-binding rules — the
 non-interactive constraint, the ask-first rules, the forbidden operations —
-and the routing tables that send a request to the one reference that answers
-it, keyed on what the user asked for or on the token jj printed.
+and the routing tables that assign every requested operation and jj output
+token to its owner. Publishing is split by push, sync, bookmark, bookmark
+conflict, and tag branches so unrelated guidance stays unloaded.
 
 When jj refuses an operation as immutable, a read-only helper reports which
 clause of the active `immutable_heads()` definition captures the revision

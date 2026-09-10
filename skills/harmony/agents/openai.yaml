@@ -1,4 +1,4 @@
 interface:
   display_name: "Harmony"
-  short_description: "Harmonize stale workspace state, divergent successors, and conflicts"
-  default_prompt: "Use $harmony to harmonize stale workspace state, divergent successors, and conflicts safely."
+  short_description: "Repair stale, divergent, or conflicted jj state"
+  default_prompt: "Use $harmony to diagnose and repair the reported stale, divergent, conflicted, or lost-file state."

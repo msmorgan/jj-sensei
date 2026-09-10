@@ -133,8 +133,8 @@ jj --no-pager new main feature -m 'merge feature into main'
 ```
 
 Neither bookmark advances on its own; whether `main` should then move onto the
-merge is a decision to surface, not assume. See
-[Publish and land work](shipping.md).
+merge is a decision to surface, not assume. See [Manage
+bookmarks](shipping/bookmarks.md).
 
 ## Select revisions explicitly
 

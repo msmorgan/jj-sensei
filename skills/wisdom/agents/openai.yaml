@@ -1,4 +1,4 @@
 interface:
   display_name: "Wisdom"
-  short_description: "Choose useful jj history-shaping idioms"
-  default_prompt: "Use $wisdom to recognize this Jujutsu history-shaping scenario and choose the focused idiom or guarded technique that fits it."
+  short_description: "Route every Jujutsu version-control task"
+  default_prompt: "Use $wisdom before any version-control command in this Jujutsu repository, then follow the smallest sufficient route."

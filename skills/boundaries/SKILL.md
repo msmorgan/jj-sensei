@@ -1,25 +1,24 @@
 ---
 name: boundaries
-description: Install or audit jj-sensei's repository-level immutable_heads configuration for safe multi-workspace isolation. Use when asked to set up, initialize, upgrade, verify, or troubleshoot jj-sensei workspace protection.
+description: Load to install or audit jj-sensei's repository-level immutable_heads protection, or to diagnose multi-workspace isolation and workspace topology.
 metadata:
   kind: reference
 ---
 
-# Set Up jj Workspace Isolation
+# Protect jj Workspace Boundaries
 
-Run this skill from the repository's `default` workspace. Resolve the helper
-path from this loaded `SKILL.md`, not from the target repository:
+Run this skill from the repository's `default` workspace. Choose the branch
+before invoking the helper, whose path resolves from this loaded `SKILL.md`:
 
-```bash
-"<skill-dir>/scripts/setup-immutability"
-```
+| Request | Command | Completion criterion |
+|---|---|---|
+| Audit, verify, or troubleshoot | `"<skill-dir>/scripts/setup-immutability" --check` | Exit `0`; configuration and topology both verify without mutation |
+| Install, initialize, or upgrade | `"<skill-dir>/scripts/setup-immutability"` | Exit `0`; configuration is installed and then verified |
 
-The helper exits `0` on successful verification, `70` after an internal
-error, `75` when another transaction holds the lock, and `80` when the
-workspace or topology needs human judgment. Present a `70` or `80` diagnosis
-rather than improvising a recovery command — these statuses are the
-helper's own; ordinary jj syntax and option errors do not invoke this
-protocol.
+Exit `70` means an internal error, `75` means another transaction holds the
+lock, and `80` means the workspace or topology needs human judgment. For `70`
+or `80`, present the helper's diagnosis and stop. These statuses belong to the
+helper; ordinary jj syntax and option errors do not invoke this protocol.
 
 The helper installs four readable repository revset aliases:
 
@@ -68,19 +67,12 @@ human judgment. `jj workspace forget <name>` clears it, but that's the
 user's call: a missing directory can equally be an unmounted volume, and
 workspace lifecycle is not an agent decision. Report it and ask.
 
-To audit without changing configuration:
-
-```bash
-"<skill-dir>/scripts/setup-immutability" --check
-```
-
 ## Workspace lifecycle
 
 ```bash
 jj --no-pager workspace list
 jj --no-pager workspace root
 jj --no-pager workspace add ../feature-x --name feature-x -r main -m "feature-x workspace"
-jj --no-pager workspace forget feature-x
 ```
 
 Workspaces are live pointers to a mutable change in one shared repo, unlike
@@ -101,4 +93,5 @@ though it is not itself returned by `immutable_heads()`.
 `workspace forget` unregisters a workspace without touching its directory,
 which can be deleted before or after — it is the resolution for the
 orphaned registrations this helper reports, and as above it stays a
-human-confirmed step, not an agent's call.
+human-confirmed step, not an agent's call. After that confirmation, use
+`jj --no-pager workspace forget feature-x`.

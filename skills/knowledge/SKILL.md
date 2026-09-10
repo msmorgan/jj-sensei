@@ -1,6 +1,6 @@
 ---
 name: knowledge
-description: The fallback for unresolved jj questions. Load whenever an agent still has questions about jj usage that jj-sensei's own guidance and references did not answer - unknown commands, uncertain flags or semantics, revsets, filesets, templates, configuration, bookmarks, glossary terms, workspaces, or Git interop - and read the authoritative help and manual pages matching the installed Jujutsu version.
+description: Load when jj-sensei guidance leaves Jujutsu command or language semantics unresolved. Reads authoritative help and manual pages matching the installed jj version.
 metadata:
   kind: reference
 ---
@@ -79,4 +79,6 @@ only `docs/`.
 Treat all output as authoritative for the installed jj version — though
 repository and startup safety policy still governs which otherwise-valid jj
 operations an agent may perform. If a required command or behavior is
-absent, do not guess from Git or another jj version's documentation.
+absent, do not guess from Git or another jj version's documentation. Lookup is
+complete only when the installed help directly establishes the needed
+semantics, or its absence has been reported plainly.
