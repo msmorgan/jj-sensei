@@ -133,8 +133,10 @@ Its guarded escape hatch is interpolation: turning one mixed change into two
 by constructing an intermediate state between them when that isn't a matter
 of selecting files and lines — e.g. because generated artifacts must be
 recreated at that state. The guarded helper journals every transition and
-can finish or abort an interrupted construction. It's intentionally narrow,
-not a general replacement for `jj split`.
+can finish or abort an interrupted construction. When the intermediate tree
+already exists, `interpolate insert --from SNAPSHOT -B TARGET -m DESCRIPTION`
+inserts it without switching the working copy or changing descendant trees.
+Both modes are intentionally narrow, not general replacements for `jj split`.
 
 ### boundaries
 

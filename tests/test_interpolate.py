@@ -5,7 +5,7 @@ import subprocess
 import pytest
 
 from jj_sensei import interpolate
-from jj_sensei.interpolate import StateStore, run_abort, run_begin, run_finish
+from jj_sensei.interpolate import StateStore, run_abort, run_begin, run_finish, run_insert
 from jj_sensei.jj import Jj, JjError
 from jj_sensei.repair import EXIT_HUMAN_REQUIRED, EXIT_INTERNAL_ERROR
 from jj_sensei.setup import run_setup
@@ -370,3 +370,271 @@ def test_abort_resumes_after_each_history_mutation(jj_repo, monkeypatch, command
     assert run_abort(jj_repo.root) == 0
     assert StateStore(jj_repo.root).load() is None
     assert Jj(jj_repo.root).one_commit("@").change_id == target.change_id
+
+
+def _make_snapshots(jj_repo):
+    snapshots = []
+    for value in (1, 2):
+        jj_repo.write(jj_repo.root, "f.txt", f"value = {value}\n")
+        snapshots.append(Jj(jj_repo.root).one_commit("@", snapshot=True))
+    jj_repo.write(jj_repo.root, "f.txt", "value = 3\n")
+    jj_repo.write(jj_repo.root, "later.txt", "only in final\n")
+    target = Jj(jj_repo.root).one_commit("@", snapshot=True)
+    return snapshots, target
+
+
+def _insert(jj_repo, snapshot, target, message="checkpoint"):
+    return run_insert(
+        jj_repo.root, source=snapshot.commit_id, before=target.change_id, message=message
+    )
+
+
+def test_snapshot_series_preserves_working_copy_and_produces_incremental_diffs(jj_repo):
+    snapshots, target = _make_snapshots(jj_repo)
+    jj = Jj(jj_repo.root)
+    previous = jj.one_commit("@-")
+    for i, snapshot in enumerate(snapshots, 1):
+        assert _insert(jj_repo, snapshot, target, f"checkpoint {i}") == 0
+        current = jj.one_commit("@")
+        assert current.change_id == target.change_id
+        assert not jj.diff_between(current.commit_id, target.commit_id)
+        assert (jj_repo.root / "f.txt").read_text() == "value = 3\n"
+        assert (jj_repo.root / "later.txt").read_text() == "only in final\n"
+        inserted = jj.one_commit("@-")
+        assert inserted.description == f"checkpoint {i}"
+        assert jj.one_commit("@--").change_id == previous.change_id
+        assert not jj.diff_between(inserted.commit_id, snapshot.commit_id)
+        assert not inserted.conflict
+        previous = inserted
+    diff = jj.run("diff", "--git", "-r", previous.change_id).stdout
+    assert "-value = 1" in diff and "+value = 2" in diff
+    assert StateStore(jj_repo.root).load() is None
+
+
+def test_snapshot_insertion_preserves_descendants_and_an_empty_working_copy(jj_repo):
+    snapshots, target = _make_snapshots(jj_repo)
+    jj_repo.commit(jj_repo.root, "target")
+    jj_repo.write(jj_repo.root, "f.txt", "descendant edits the same line\n")
+    jj_repo.commit(jj_repo.root, "descendant")
+    jj = Jj(jj_repo.root)
+    current = jj.one_commit("@")
+    descendants = jj.commits(f"{target.change_id}::")
+
+    assert _insert(jj_repo, snapshots[0], target) == 0
+
+    assert jj.one_commit("@").change_id == current.change_id
+    assert jj.one_commit("@").description == ""
+    assert jj.one_commit("@").empty
+    assert (jj_repo.root / "f.txt").read_text() == "descendant edits the same line\n"
+    for old in descendants:
+        new = jj.one_commit(old.change_id)
+        assert new.description == old.description
+        assert not jj.diff_between(old.commit_id, new.commit_id)
+
+
+@pytest.mark.parametrize("command", ["new", "restore", "describe"])
+def test_snapshot_insertion_resumes_after_each_mutation(jj_repo, monkeypatch, command):
+    snapshots, target = _make_snapshots(jj_repo)
+    _crash_after(monkeypatch, jj_repo.root, command)
+    assert _insert(jj_repo, snapshots[0], target) == EXIT_INTERNAL_ERROR
+    jj = Jj(jj_repo.root)
+    assert jj.one_commit("@").change_id == target.change_id
+    assert not jj.diff_between(jj.one_commit("@").commit_id, target.commit_id)
+    inserted = jj.one_commit("@-")
+    monkeypatch.setattr(interpolate, "Jj", Jj)
+
+    assert _insert(jj_repo, snapshots[0], target) == 0
+
+    assert jj.one_commit("@-").change_id == inserted.change_id
+    assert jj.one_commit("@-").description == "checkpoint"
+    assert not jj.diff_between(jj.one_commit("@-").commit_id, snapshots[0].commit_id)
+    assert StateStore(jj_repo.root).load() is None
+
+
+@pytest.mark.parametrize("command", ["new", "restore", "describe"])
+def test_snapshot_abort_discards_only_its_checkpoint(jj_repo, monkeypatch, command):
+    snapshots, target = _make_snapshots(jj_repo)
+    jj = Jj(jj_repo.root)
+    original_parent = jj.one_commit("@-")
+    _crash_after(monkeypatch, jj_repo.root, command)
+    assert _insert(jj_repo, snapshots[0], target) == EXIT_INTERNAL_ERROR
+    inserted = jj.one_commit("@-")
+    monkeypatch.setattr(interpolate, "Jj", Jj)
+
+    assert run_abort(jj_repo.root) == 0
+
+    assert jj.one_commit("@").change_id == target.change_id
+    assert not jj.diff_between(jj.one_commit("@").commit_id, target.commit_id)
+    assert jj.one_commit("@-").commit_id == original_parent.commit_id
+    assert not jj.commits(f"change_id({inserted.change_id})")
+    assert StateStore(jj_repo.root).load() is None
+
+
+def test_snapshot_abort_resumes_after_abandon(jj_repo, monkeypatch):
+    snapshots, target = _make_snapshots(jj_repo)
+    _crash_after(monkeypatch, jj_repo.root, "restore")
+    assert _insert(jj_repo, snapshots[0], target) == EXIT_INTERNAL_ERROR
+    _crash_after(monkeypatch, jj_repo.root, "abandon")
+    assert run_abort(jj_repo.root) == EXIT_INTERNAL_ERROR
+    monkeypatch.setattr(interpolate, "Jj", Jj)
+    assert run_abort(jj_repo.root) == 0
+    assert StateStore(jj_repo.root).load() is None
+
+
+@pytest.mark.parametrize("destination", ["target", "checkpoint"])
+def test_snapshot_resume_and_abort_preserve_external_edits(jj_repo, monkeypatch, destination):
+    snapshots, target = _make_snapshots(jj_repo)
+    _crash_after(monkeypatch, jj_repo.root, "new")
+    assert _insert(jj_repo, snapshots[0], target) == EXIT_INTERNAL_ERROR
+    monkeypatch.setattr(interpolate, "Jj", Jj)
+    jj = Jj(jj_repo.root)
+    if destination == "checkpoint":
+        checkpoint = jj.one_commit("@-")
+        jj_repo.run(
+            jj_repo.root,
+            "restore",
+            "--from",
+            snapshots[1].commit_id,
+            "--into",
+            checkpoint.change_id,
+            "--restore-descendants",
+        )
+        edited = jj.one_commit(checkpoint.change_id)
+    else:
+        jj_repo.write(jj_repo.root, "f.txt", "external edit\n")
+        edited = jj.one_commit("@", snapshot=True)
+
+    assert _insert(jj_repo, snapshots[0], target) == EXIT_HUMAN_REQUIRED
+    assert run_abort(jj_repo.root) == EXIT_HUMAN_REQUIRED
+    assert jj.one_commit(edited.change_id).commit_id == edited.commit_id
+    assert StateStore(jj_repo.root).load() is not None
+
+
+def test_snapshot_insertion_rejects_changed_base_content(jj_repo, capsys):
+    snapshots, target = _make_snapshots(jj_repo)
+    jj_repo.run(jj_repo.root, "new", "@-", "-m", "unrelated base change")
+    jj_repo.write(jj_repo.root, "unrelated.txt", "must stay in the base\n")
+    jj_repo.run(jj_repo.root, "rebase", "-r", target.change_id, "-d", "@")
+    jj_repo.run(jj_repo.root, "edit", target.change_id)
+    jj = Jj(jj_repo.root)
+    before = jj.one_commit("@", snapshot=True)
+
+    assert _insert(jj_repo, snapshots[0], target) == EXIT_HUMAN_REQUIRED
+
+    assert "incompatible" in capsys.readouterr().err
+    assert jj.one_commit("@").commit_id == before.commit_id
+    assert StateStore(jj_repo.root).load() is None
+
+
+def test_snapshot_insertion_rejects_merge_target(jj_repo):
+    snapshots, target = _make_snapshots(jj_repo)
+    jj_repo.run(jj_repo.root, "new", "@-", "-m", "sibling")
+    jj_repo.write(jj_repo.root, "sibling.txt", "sibling\n")
+    jj_repo.run(jj_repo.root, "new", "@", target.change_id, "-m", "merge")
+    jj_repo.write(jj_repo.root, "merge.txt", "merge content\n")
+    merge = Jj(jj_repo.root).one_commit("@", snapshot=True)
+    assert _insert(jj_repo, snapshots[0], merge) == EXIT_HUMAN_REQUIRED
+    assert StateStore(jj_repo.root).load() is None
+
+
+def test_snapshot_resume_rejects_different_request_and_wrong_phase(jj_repo, monkeypatch):
+    snapshots, target = _make_snapshots(jj_repo)
+    _crash_after(monkeypatch, jj_repo.root, "new")
+    assert _insert(jj_repo, snapshots[0], target) == EXIT_INTERNAL_ERROR
+    monkeypatch.setattr(interpolate, "Jj", Jj)
+    assert _insert(jj_repo, snapshots[1], target) == EXIT_HUMAN_REQUIRED
+    assert run_finish(jj_repo.root) == EXIT_HUMAN_REQUIRED
+    assert run_begin(jj_repo.root, after="@-", before="@", message="other") == EXIT_HUMAN_REQUIRED
+    assert _insert(jj_repo, snapshots[0], target) == 0
+
+
+class _CrashBeforeCommand(_CrashAfterCommand):
+    def run(self, *args, **kwargs):
+        if not self.crashed and args[:1] == (self.command,):
+            self.crashed = True
+            failed = subprocess.CompletedProcess(args, 1, "", "injected death before command")
+            raise JjError(["jj", "--no-pager", *args], failed)
+        return self.delegate.run(*args, **kwargs)
+
+
+@pytest.mark.parametrize("command", ["new", "restore", "describe"])
+@pytest.mark.parametrize("abort", [False, True])
+def test_snapshot_recovers_when_a_journaled_command_never_ran(jj_repo, monkeypatch, command, abort):
+    snapshots, target = _make_snapshots(jj_repo)
+    jj = Jj(jj_repo.root)
+    count = len(jj.commits("all()"))
+    crashing = _CrashBeforeCommand(jj_repo.root, command)
+    monkeypatch.setattr(interpolate, "Jj", lambda _cwd=None: crashing)
+    assert _insert(jj_repo, snapshots[0], target) == EXIT_INTERNAL_ERROR
+    monkeypatch.setattr(interpolate, "Jj", Jj)
+
+    assert (run_abort(jj_repo.root) if abort else _insert(jj_repo, snapshots[0], target)) == 0
+    assert len(jj.commits("all()")) == count + (0 if abort else 1)
+    assert not jj.diff_between(target.commit_id, jj.one_commit(target.change_id).commit_id)
+    assert jj.one_commit("@").change_id == target.change_id
+    assert StateStore(jj_repo.root).load() is None
+
+
+def test_snapshot_refuses_a_replaced_insertion_edge(jj_repo, monkeypatch):
+    snapshots, target = _make_snapshots(jj_repo)
+    _crash_after(monkeypatch, jj_repo.root, "new")
+    assert _insert(jj_repo, snapshots[0], target) == EXIT_INTERNAL_ERROR
+    monkeypatch.setattr(interpolate, "Jj", Jj)
+    jj_repo.run(
+        jj_repo.root, "new", "--no-edit", "-B", target.change_id, "-m", "external insertion"
+    )
+    jj = Jj(jj_repo.root)
+    external = jj.one_commit("@-")
+
+    assert _insert(jj_repo, snapshots[0], target) == EXIT_HUMAN_REQUIRED
+    assert run_abort(jj_repo.root) == EXIT_HUMAN_REQUIRED
+    assert jj.one_commit("@-").commit_id == external.commit_id
+
+
+def test_snapshot_respects_workspace_immutability(jj_repo, capsys):
+    snapshots, target = _make_snapshots(jj_repo)
+    assert run_setup(jj_repo.root) == 0
+    feature = jj_repo.add_workspace("feature")
+    assert (
+        run_insert(
+            feature,
+            source=snapshots[0].commit_id,
+            before=target.change_id,
+            message="must not rewrite default",
+        )
+        == EXIT_HUMAN_REQUIRED
+    )
+    assert "immutable" in capsys.readouterr().err
+    assert StateStore(feature).load() is None
+
+    jj_repo.write(feature, "feature.txt", "first\n")
+    jj = Jj(feature)
+    snapshot = jj.one_commit("@", snapshot=True)
+    jj_repo.write(feature, "feature.txt", "second\n")
+    own_target = jj.one_commit("@", snapshot=True)
+    assert (
+        run_insert(
+            feature,
+            source=snapshot.commit_id,
+            before=own_target.change_id,
+            message="feature checkpoint",
+        )
+        == 0
+    )
+    assert jj.one_commit("@").change_id == own_target.change_id
+    assert jj.one_commit(target.change_id).commit_id == target.commit_id
+
+
+def test_snapshot_cli_dispatch(jj_repo, monkeypatch):
+    snapshots, target = _make_snapshots(jj_repo)
+    monkeypatch.chdir(jj_repo.root)
+    assert (
+        interpolate.main(
+            ["insert", "--from", snapshots[0].commit_id, "-B", "@", "-m", "CLI checkpoint"]
+        )
+        == 0
+    )
+    jj = Jj(jj_repo.root)
+    assert jj.one_commit("@-").description == "CLI checkpoint"
+    assert not jj.diff_between(jj.one_commit("@-").commit_id, snapshots[0].commit_id)
+    assert jj.one_commit("@").change_id == target.change_id

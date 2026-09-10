@@ -56,29 +56,28 @@ jj --no-pager log -r @ --no-graph -T 'change_id ++ " " ++ commit_id ++ "\n"'
 Reconstruct the series from oldest boundary to newest. Use ordinary `jj split`
 with an explicit fileset for a files-only boundary. For a single-parent `@`
 whose selected checkpoints have compatible parent content, insert each earlier
-checkpoint directly before the original change:
+checkpoint directly before the original change with the
+[interpolation helper](interpolate.md#insert-an-existing-snapshot):
 
 ```bash
-jj --no-pager new --no-edit -B ORIGINAL_CHANGE_ID -m 'earlier change'
-jj --no-pager restore --from SNAPSHOT --into 'ORIGINAL_CHANGE_ID-' --restore-descendants
+"<skill-dir>/scripts/interpolate" insert --from SNAPSHOT -B ORIGINAL_CHANGE_ID -m 'earlier change'
 jj --no-pager diff --git -r 'ORIGINAL_CHANGE_ID-'
 ```
 
 Repeat with later checkpoints, keeping `ORIGINAL_CHANGE_ID` fixed. Its parent
 is the newly inserted change each time. Leave the final state in the original
 change; its diff becomes the work remaining after the last checkpoint.
-`--no-edit` keeps the working copy on the original change, and
-`--restore-descendants` preserves descendant trees while filling the lower
-change. No final rebase is needed.
+The helper uses `--no-edit` and `--restore-descendants` to keep the working
+copy on the original change and preserve descendant trees while filling the
+lower change. It checks parent compatibility and journals the insertion for
+resumption or abort. No final rebase is needed.
 
 The whole-tree restore is deliberate here: each lower change should have
 exactly its selected snapshot's tree. If a snapshot contains unrelated work
 or was based on different parent content, use the normalized evolog patches
-as evidence and construct only the intended checkpoint content. A scoped
-restore with the same `--into` and `--restore-descendants` options can select
-paths, but still copies historical base content within those paths. Use
-[interpolation](interpolate.md) when the intermediate state needs to be
-constructed in the working copy, for example by running generators.
+as evidence and construct only the intended checkpoint content with
+[interpolation's `begin` / `finish` mode](interpolate.md#construct-a-state-in-the-working-copy),
+for example by running generators.
 
 `duplicate SNAPSHOT -d PARENT` does not materialize this sequence of trees:
 it reapplies each snapshot's cumulative diff against its original parents.

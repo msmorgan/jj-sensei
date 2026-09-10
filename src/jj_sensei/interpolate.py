@@ -21,6 +21,10 @@ The original content is recovered from the target's pre-rebase commit id, which
 `begin` records. Rewriting a commit leaves the old one in the store, hidden but
 still addressable, so no duplicate commit is needed and nothing has to be
 cleaned up afterwards.
+
+`insert --from SNAPSHOT -B BEFORE` supplies an existing intermediate tree.
+It inserts without checking out the lower change and preserves descendant
+trees throughout, so it needs neither working-copy edits nor a finish step.
 """
 
 from __future__ import annotations
@@ -69,6 +73,11 @@ class InterpolateState:
     return_requires_pin: bool
     return_pinned: bool = False
     base_change_id: str | None = None
+    snapshot_commit_id: str | None = None
+    snapshot_argument: str | None = None
+    before_argument: str | None = None
+    preserved_trees: dict[str, str] | None = None
+    return_commit_id: str | None = None
 
 
 class StateStore:
@@ -126,6 +135,17 @@ def run_finish(cwd: Path | str | None = None) -> int:
     return _run_locked("interpolate finish", cwd, _finish)
 
 
+def run_insert(
+    cwd: Path | str | None = None,
+    source: str | None = None,
+    before: str | None = None,
+    message: str | None = None,
+) -> int:
+    return _run_locked(
+        "interpolate insert", cwd, lambda jj, store: _insert(jj, store, source, before, message)
+    )
+
+
 def run_abort(cwd: Path | str | None = None) -> int:
     return _run_locked("interpolate abort", cwd, _abort)
 
@@ -140,6 +160,10 @@ def _begin(
     existing = store.load()
     if existing is not None:
         state = _require_state(jj, store)
+        if state.snapshot_commit_id is not None:
+            raise HumanRequired(
+                "snapshot insertion is in progress; rerun `interpolate insert` or abort"
+            )
         if state.phase in _BEGIN_PHASES:
             if message is not None and message != state.base_description:
                 raise HumanRequired(
@@ -316,6 +340,10 @@ def _pull_target_content_down(jj: Jj, state: InterpolateState) -> None:
 
 def _finish(jj: Jj, store: StateStore) -> int:
     state = _require_state(jj, store)
+    if state.snapshot_commit_id is not None:
+        raise HumanRequired(
+            "snapshot insertion needs no finish step; rerun `interpolate insert` or abort"
+        )
     if state.phase in _BEGIN_PHASES:
         raise HumanRequired(
             "interpolation setup was interrupted; rerun `interpolate begin` before finishing"
@@ -365,6 +393,8 @@ def _finish(jj: Jj, store: StateStore) -> int:
 
 def _abort(jj: Jj, store: StateStore) -> int:
     state = _require_state(jj, store)
+    if state.snapshot_commit_id is not None:
+        return _abort_snapshot(jj, store, state)
     if (
         state.phase in _FINISH_PHASES
         or state.phase == "editing"
@@ -425,6 +455,258 @@ def _abort(jj: Jj, store: StateStore) -> int:
         f"interpolate: discarded the interpolated commit; "
         f"{state.target_change_id[:12]} holds its original content again."
     )
+    return EXIT_CLEAN
+
+
+def _insert(
+    jj: Jj, store: StateStore, source: str | None, before: str | None, message: str | None
+) -> int:
+    if store.load() is not None:
+        state = _require_state(jj, store)
+        if state.snapshot_commit_id is None:
+            raise HumanRequired(
+                "an editable interpolation is in progress; finish or abort it first"
+            )
+        if (source, before, message) != (
+            state.snapshot_argument,
+            state.before_argument,
+            state.base_description,
+        ):
+            raise HumanRequired(
+                "rerun the original `interpolate insert` command with the same arguments"
+            )
+        if state.phase == "snapshot_abort_pending":
+            raise HumanRequired("an abort is in progress; rerun `interpolate abort`")
+        return _advance_snapshot(jj, store, state)
+
+    if not source or not before or not message or not message.strip():
+        raise HumanRequired("insertion requires --from SNAPSHOT, -B TARGET, and -m DESCRIPTION")
+    target = jj.one_commit(before, snapshot=True)
+    _refuse_unsuitable_target(target)
+    after = _single_parent(jj, target)
+    snapshot = jj.one_commit(source)
+    if snapshot.conflict:
+        raise HumanRequired("the snapshot has conflicts; choose a resolved intermediate state")
+    _require_compatible_snapshot(jj, snapshot, after)
+    if _same_tree(jj, snapshot.commit_id, after.commit_id):
+        raise HumanRequired(
+            "the snapshot already matches the target's parent; no insertion is needed"
+        )
+
+    descendants = jj.commits(f"{safe_revision(target.change_id)}::")
+    if any(commit.immutable for commit in descendants):
+        raise HumanRequired(
+            "insertion would rewrite an immutable descendant; no change was inserted"
+        )
+    workspace = jj.current_workspace()
+    current = jj.one_commit("@")
+    state = InterpolateState(
+        version=STATE_VERSION,
+        run_id=uuid.uuid4().hex,
+        workspace_name=workspace.name,
+        workspace_root=str(workspace.root),
+        phase="snapshot_insert_pending",
+        after_change_id=after.change_id,
+        target_change_id=target.change_id,
+        target_commit_id=target.commit_id,
+        target_description=target.description,
+        base_description=message,
+        return_change_id=current.change_id,
+        return_original_description=current.description,
+        return_requires_pin=False,
+        snapshot_commit_id=snapshot.commit_id,
+        snapshot_argument=source,
+        before_argument=before,
+        preserved_trees={commit.change_id: commit.commit_id for commit in descendants},
+        return_commit_id=current.commit_id,
+    )
+    store.save(state)
+    return _advance_snapshot(jj, store, state)
+
+
+def _single_parent(jj: Jj, commit: Commit) -> Commit:
+    parents = jj.commits(f"parents({safe_revision(commit.commit_id)})")
+    if len(parents) != 1:
+        raise HumanRequired(
+            "snapshot insertion currently requires single-parent snapshots and targets"
+        )
+    return parents[0]
+
+
+def _require_compatible_snapshot(jj: Jj, snapshot: Commit, after: Commit) -> None:
+    source_parent = _single_parent(jj, snapshot)
+    if _same_tree(jj, source_parent.commit_id, after.commit_id):
+        return
+    # A preceding insertion has a new change ID but the tree of an earlier
+    # checkpoint. Recognize it through the source's history, not its description.
+    history = jj.run(
+        "evolog",
+        "-r",
+        safe_revision(snapshot.commit_id),
+        "--no-graph",
+        "-T",
+        'commit.commit_id() ++ "\\n"',
+        ignore_working_copy=True,
+    ).stdout.splitlines()
+    for revision in history:
+        candidate = jj.one_commit(safe_revision(revision))
+        parents = jj.commits(f"parents({safe_revision(candidate.commit_id)})")
+        if (
+            len(parents) == 1
+            and _same_tree(jj, parents[0].commit_id, source_parent.commit_id)
+            and _same_tree(jj, candidate.commit_id, after.commit_id)
+        ):
+            return
+    raise HumanRequired(
+        "snapshot parent content is incompatible with the insertion point; "
+        "choose a snapshot on the same base or construct an intermediate state with `begin`"
+    )
+
+
+def _check_snapshot_preservation(jj: Jj, state: InterpolateState) -> None:
+    current = jj.one_commit("@", snapshot=True)
+    if current.change_id != state.return_change_id:
+        raise HumanRequired("the working copy moved during snapshot insertion; state is preserved")
+    if state.preserved_trees is None or state.return_commit_id is None:
+        raise HumanRequired("snapshot insertion is missing its recorded trees; inspect the journal")
+    descendants = jj.commits(f"{safe_revision(state.target_change_id)}::")
+    if {commit.change_id for commit in descendants} != set(state.preserved_trees):
+        raise HumanRequired("the target's descendants changed during insertion; state is preserved")
+    for commit in [*descendants, current]:
+        recorded = state.preserved_trees.get(commit.change_id, state.return_commit_id)
+        if not _same_tree(jj, recorded, commit.commit_id):
+            raise HumanRequired(
+                f"{commit.change_id} changed content during insertion; state is preserved"
+            )
+    if any(commit.immutable for commit in descendants):
+        raise HumanRequired("the target or a descendant became immutable; state is preserved")
+    after = _one_by_change_id(jj, state.after_change_id, "original parent")
+    original_parent = _single_parent(jj, jj.one_commit(safe_revision(state.target_commit_id)))
+    if after.commit_id != original_parent.commit_id:
+        raise HumanRequired("the original parent changed during insertion; state is preserved")
+
+
+def _snapshot_marker(state: InterpolateState) -> str:
+    return f"jj-sensei: interpolate snapshot {state.run_id}"
+
+
+def _snapshot_base(jj: Jj, state: InterpolateState) -> Commit | None:
+    parent = _single_parent(jj, _target_commit(jj, state))
+    if parent.change_id == state.after_change_id:
+        if state.base_change_id is not None and state.phase != "snapshot_abort_pending":
+            raise HumanRequired("the inserted change disappeared; state is preserved")
+        if state.base_change_id is not None and _base_is_visible(jj, state):
+            raise HumanRequired("the checkpoint was detached but still exists; state is preserved")
+        return None
+    if state.base_change_id is None:
+        if parent.description != _snapshot_marker(state):
+            raise HumanRequired(
+                "the insertion edge changed; no owned checkpoint could be identified"
+            )
+    elif parent.change_id != state.base_change_id:
+        raise HumanRequired("the insertion edge changed; state is preserved")
+    _refuse_changed_edge(jj, state, base_change_id=parent.change_id)
+    if parent.immutable:
+        raise HumanRequired("the inserted change became immutable; state is preserved")
+    return parent
+
+
+def _advance_snapshot(jj: Jj, store: StateStore, state: InterpolateState) -> int:
+    _check_snapshot_preservation(jj, state)
+    if state.phase == "snapshot_insert_pending":
+        base = _snapshot_base(jj, state)
+        if base is None:
+            # The unique marker identifies our commit even if the process dies
+            # after `new` succeeds but before its change ID reaches the journal.
+            jj.run(
+                "new",
+                "--no-edit",
+                "-B",
+                safe_revision(state.target_change_id),
+                "-m",
+                _snapshot_marker(state),
+            )
+            base = _snapshot_base(jj, state)
+        if base is None:
+            raise HumanRequired("jj new did not insert a checkpoint; inspect the graph")
+        state.base_change_id = base.change_id
+        state.phase = "snapshot_restore_pending"
+        store.save(state)
+
+    _check_snapshot_preservation(jj, state)
+    base = _snapshot_base(jj, state)
+    if base is None or state.snapshot_commit_id is None:
+        raise HumanRequired("the checkpoint or snapshot is missing; state is preserved")
+    if state.phase == "snapshot_restore_pending":
+        if base.description != _snapshot_marker(state):
+            raise HumanRequired(
+                "the checkpoint description changed during insertion; state is preserved"
+            )
+        if not _same_tree(jj, base.commit_id, state.snapshot_commit_id):
+            if not base.empty:
+                raise HumanRequired(
+                    "the checkpoint was edited during insertion; refusing to overwrite it"
+                )
+            jj.run(
+                "restore",
+                "--from",
+                safe_revision(state.snapshot_commit_id),
+                "--into",
+                safe_revision(base.change_id),
+                "--restore-descendants",
+            )
+        _check_snapshot_preservation(jj, state)
+        base = _base_commit(jj, state)
+        if not _same_tree(jj, base.commit_id, state.snapshot_commit_id):
+            raise HumanRequired("the inserted tree does not match the snapshot; state is preserved")
+        state.phase = "snapshot_describe_pending"
+        store.save(state)
+
+    if state.phase != "snapshot_describe_pending":
+        raise HumanRequired(f"unknown snapshot insertion phase {state.phase!r}")
+    if not _same_tree(jj, base.commit_id, state.snapshot_commit_id):
+        raise HumanRequired("the checkpoint was edited during insertion; state is preserved")
+    if base.description == _snapshot_marker(state):
+        jj.run("describe", safe_revision(base.change_id), "-m", state.base_description)
+    elif base.description != state.base_description:
+        raise HumanRequired(
+            "the checkpoint description changed during insertion; state is preserved"
+        )
+    _check_snapshot_preservation(jj, state)
+    base = _snapshot_base(jj, state)
+    if (
+        base is None
+        or base.description != state.base_description
+        or not _same_tree(jj, base.commit_id, state.snapshot_commit_id)
+    ):
+        raise HumanRequired(
+            "the completed checkpoint does not match the request; state is preserved"
+        )
+    store.clear()
+    print(f"interpolate: inserted {base.change_id} before {state.target_change_id}.")
+    print(f"  {state.base_description}")
+    return EXIT_CLEAN
+
+
+def _abort_snapshot(jj: Jj, store: StateStore, state: InterpolateState) -> int:
+    _check_snapshot_preservation(jj, state)
+    base = _snapshot_base(jj, state)
+    if base is not None:
+        if base.description not in {_snapshot_marker(state), state.base_description}:
+            raise HumanRequired("the checkpoint description changed; refusing to discard it")
+        if not base.empty and not _same_tree(jj, base.commit_id, state.snapshot_commit_id):
+            raise HumanRequired("the checkpoint was edited; refusing to discard it")
+        state.base_change_id = base.change_id
+        _refuse_bookmarked_or_foreign_base(jj, state)
+    state.phase = "snapshot_abort_pending"
+    store.save(state)
+    if base is not None:
+        jj.run("abandon", "--restore-descendants", safe_revision(base.change_id))
+    _check_snapshot_preservation(jj, state)
+    if _snapshot_base(jj, state) is not None:
+        raise HumanRequired("jj abandon did not remove the checkpoint; state is preserved")
+    store.clear()
+    print(f"interpolate: discarded snapshot insertion before {state.target_change_id}.")
     return EXIT_CLEAN
 
 
@@ -685,8 +967,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="jj-sensei interpolate",
         description=(
-            "Guarded escape hatch for constructing an intermediate state between two commits "
-            "when doing so is not a matter of selecting files and lines."
+            "Insert an intermediate state from a snapshot, or construct it through "
+            "working-copy edits, while preserving the upper change's content."
         ),
         epilog=(
             "Exit 0 when clean; 1 when the working copy awaits your edits; "
@@ -694,6 +976,22 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     commands = parser.add_subparsers(dest="phase", required=True)
+    insert = commands.add_parser(
+        "insert",
+        help="insert a snapshot before a single-parent target without switching the working copy",
+        description=(
+            "Insert the snapshot's whole tree before TARGET, preserving descendant trees. "
+            "The target's parent must match the snapshot's base or an earlier checkpoint "
+            "from its evolution history. Rerun the same command after an interruption."
+        ),
+    )
+    insert.add_argument(
+        "--from", dest="source", required=True, help="snapshot revision (use its commit ID)"
+    )
+    insert.add_argument("-B", "--before", required=True, help="single-parent target change")
+    insert.add_argument(
+        "-m", "--message", required=True, help="description for the inserted checkpoint"
+    )
     begin = commands.add_parser(
         "begin",
         help="begin the guarded interpolation inside a named edge",
@@ -720,6 +1018,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(list(sys.argv[1:] if argv is None else argv))
 
+    if args.phase == "insert":
+        return run_insert(source=args.source, before=args.before, message=args.message)
     if args.phase == "begin":
         return run_begin(after=args.after, before=args.before, message=args.message)
     if args.phase == "finish":

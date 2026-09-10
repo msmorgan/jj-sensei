@@ -1,10 +1,43 @@
 # Interpolate a change
 
-Interpolation constructs an intermediate state between two commits when doing
-so is not a matter of selecting files and lines. Prefer ordinary `jj split`
-whenever selection is sufficient; use this guarded escape hatch when, for
-example, generated manifests, lockfiles, snapshots, or migrations must be
-recreated at the intermediate state.
+Interpolation inserts an intermediate state while preserving the upper
+change's content. Prefer ordinary `jj split` whenever selection is sufficient.
+Use `insert` when the intermediate tree exists in a snapshot, or `begin` /
+`finish` when it must be constructed through working-copy edits.
+
+## Insert an existing snapshot
+
+```bash
+"<skill-dir>/scripts/interpolate" insert --from SNAPSHOT -B TARGET -m 'earlier change'
+```
+
+`SNAPSHOT` is a historical commit ID; `TARGET` is the change to insert before.
+The command completes in one invocation and prints the inserted change ID.
+It uses `new --no-edit` and `restore --into --restore-descendants`, leaving the
+working copy on the same change and preserving the target and descendant
+trees throughout. No `finish` or final rebase is needed.
+
+This mode requires single-parent snapshots and targets. The target's parent
+tree must match the snapshot's parent tree, or an earlier version of the
+snapshot on that same base. This admits successive checkpoints from one
+evolution log while refusing incompatible historical base content. The
+whole-tree copy is intentional; choose a snapshot whose entire state belongs
+at this boundary. The helper verifies tree preservation, not semantic commit
+boundaries.
+
+For a series, call `insert` with the selected snapshots oldest first, keeping
+the target change ID fixed. Leave the final state in the original target.
+See [Reconstruct work with evolog](using-evolog.md) for checkpoint selection.
+
+After interruption, rerun the same `insert` command with the same arguments,
+or use `abort` to discard the unfinished insertion. The journal records the
+source commit ID, so resuming uses the originally selected tree. External
+content or graph changes can require judgment rather than an automatic retry.
+
+## Construct a state in the working copy
+
+Use this mode when generated manifests, lockfiles, snapshots, or migrations
+must be recreated at the intermediate state.
 
 This is not a native jj idiom: jj's working copy is a real commit, so the
 helper works around that by temporarily moving the upper revision's complete
@@ -35,7 +68,9 @@ agrees. Then finish:
 returns to the change that was the working copy when `begin` started. The new
 lower change already has the description supplied with `-m`.
 
-To discard the interpolation and restore the original graph and content:
+## Abort and recovery
+
+To discard an unfinished interpolation and restore the original graph and content:
 
 ```bash
 "<skill-dir>/scripts/interpolate" abort
@@ -58,6 +93,6 @@ This exit-code list applies only to the helper itself, not to an ordinary jj
 invocation rejected for invalid syntax or options.
 
 Do not edit or delete `.jj/jj-sensei/interpolate.json`. Do not use operation-log
-recovery, immutability bypasses, or a manual abandon as recovery. If `begin` was
-interrupted, rerun the same `begin` command; otherwise rerun the phase named by
-the diagnosis.
+recovery, immutability bypasses, or a manual abandon as recovery. If `begin` or
+`insert` was interrupted, rerun that same command; otherwise rerun the phase
+named by the diagnosis.

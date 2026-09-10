@@ -87,7 +87,7 @@ def parser() -> argparse.ArgumentParser:
     rtfd_parser.add_argument("args", nargs=argparse.REMAINDER)
     interpolate_parser = commands.add_parser(
         "interpolate",
-        help="construct a state that files-and-lines selection cannot express",
+        help="insert a snapshot or construct an intermediate state through working-copy edits",
     )
     interpolate_parser.add_argument("args", nargs=argparse.REMAINDER)
     why_immutable_parser = commands.add_parser(
