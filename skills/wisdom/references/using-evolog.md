@@ -11,7 +11,7 @@ coordinating agent's context — this task is semi-mechanical and well-bounded.
 Keep it read-only: it should run the evolog queries itself and return only a
 compact reconstruction plan containing:
 
-- the original current commit ID;
+- the original current change ID and commit ID;
 - proposed commits in oldest-to-newest order;
 - the checkpoint commit ID, rationale, and likely reconstruction method for
   each boundary; and
@@ -46,43 +46,50 @@ context when a patch alone is insufficient:
 jj --no-pager show --git COMMIT_ID
 ```
 
-Before rewriting, record the current commit ID so the final tree remains
-independently checkable:
+Before rewriting, record the current change ID as the insertion target and
+its commit ID so the final tree remains independently checkable:
 
 ```bash
-jj --no-pager log -r @ --no-graph -T 'commit_id ++ "\n"'
+jj --no-pager log -r @ --no-graph -T 'change_id ++ " " ++ commit_id ++ "\n"'
 ```
 
-Reconstruct the series from oldest boundary to newest: ordinary `jj split`
-with an explicit fileset for a files-only boundary; when a boundary is best
-represented by one historical tree and its parent context is still
-compatible, use [interpolation](interpolate.md) to insert the lower commit,
-then restore the relevant paths from that evolog snapshot while the helper
-waits for the intermediate state:
+Reconstruct the series from oldest boundary to newest. Use ordinary `jj split`
+with an explicit fileset for a files-only boundary. For a single-parent `@`
+whose selected checkpoints have compatible parent content, insert each earlier
+checkpoint directly before the original change:
 
 ```bash
-"<skill-dir>/scripts/interpolate" begin -A '@-' -B '@' -m 'earlier change'
-jj --no-pager restore --from EVOLUTION_COMMIT_ID FILESET
-jj --no-pager diff --git
-"<skill-dir>/scripts/interpolate" finish
+jj --no-pager new --no-edit -B ORIGINAL_CHANGE_ID -m 'earlier change'
+jj --no-pager restore --from SNAPSHOT --into 'ORIGINAL_CHANGE_ID-' --restore-descendants
+jj --no-pager diff --git -r 'ORIGINAL_CHANGE_ID-'
 ```
 
-Always name a `FILESET`: without one, `restore --from` copies the snapshot's
-**entire tree** into the working copy, so every path that differs between the
-snapshot and the current state — including files the boundary was never meant
-to touch — silently changes. Limit it to the paths the boundary owns.
+Repeat with later checkpoints, keeping `ORIGINAL_CHANGE_ID` fixed. Its parent
+is the newly inserted change each time. Leave the final state in the original
+change; its diff becomes the work remaining after the last checkpoint.
+`--no-edit` keeps the working copy on the original change, and
+`--restore-descendants` preserves descendant trees while filling the lower
+change. No final rebase is needed.
 
-Repeat with later checkpoints. If the historical version was based on
-different parent content, even a scoped restore may reintroduce unrelated
-base changes in those paths — use the normalized evolog patches as evidence
-instead, and construct only the intended content rather than restoring the
-snapshot wholesale.
+The whole-tree restore is deliberate here: each lower change should have
+exactly its selected snapshot's tree. If a snapshot contains unrelated work
+or was based on different parent content, use the normalized evolog patches
+as evidence and construct only the intended checkpoint content. A scoped
+restore with the same `--into` and `--restore-descendants` options can select
+paths, but still copies historical base content within those paths. Use
+[interpolation](interpolate.md) when the intermediate state needs to be
+constructed in the working copy, for example by running generators.
+
+`duplicate SNAPSHOT -d PARENT` does not materialize this sequence of trees:
+it reapplies each snapshot's cumulative diff against its original parents.
+Successive edits to the same lines can therefore conflict even though the
+snapshots came from one change.
 
 After reconstruction, compare the final tree with the original recorded commit
 ID; the diff must be empty:
 
 ```bash
-jj --no-pager diff --git --from ORIGINAL_COMMIT_ID --to @
+jj --no-pager diff --git --from ORIGINAL_COMMIT_ID --to ORIGINAL_CHANGE_ID
 ```
 
 Review every resulting change and run the relevant tests: evolog supplies the
