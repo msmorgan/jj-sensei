@@ -16,8 +16,8 @@ Agents still use the real `jj` CLI and learn its native model.
 When a session starts anywhere beneath a `.jj/` directory, jj-sensei injects
 a one-line preamble — in Antigravity, only before the first model invocation.
 It positively names `jj` as the repository's exclusive version-control tool
-and routes every version-control command — including status — through the
-`wisdom` skill.
+and has the agent load the `wisdom` skill once, before its first
+version-control command (status included).
 
 Everything else is pulled on demand rather than pushed into every session.
 `wisdom` is the hub an agent lands on: jj's model in a paragraph, the rules

@@ -1,6 +1,6 @@
 ---
 name: wisdom
-description: Load before every version-control command in a Jujutsu repository, including status and inspection. Applies the jj model and hard guardrails, then routes by request or output token.
+description: Load once, before the first version-control command in a Jujutsu repository, including status and inspection; it then governs every later command. Applies the jj model and hard guardrails, then routes by request or output token.
 metadata:
   kind: reference
 ---
