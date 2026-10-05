@@ -55,7 +55,8 @@ Run it bare so its exit status remains visible:
 These statuses belong only to the helper. It uses a short per-workspace lock
 and a resumable journal under that workspace's `.jj/`, releasing the lock when
 an edit is required. It preserves transaction state after an internal error
-and leaves bookmarks untouched.
+and leaves bookmarks untouched, except that converging moves a bookmark on a
+divergent successor to the converged change.
 
 Use narrower helpers only after diagnosis establishes their exact scope:
 

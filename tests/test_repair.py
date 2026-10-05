@@ -3,6 +3,9 @@ from __future__ import annotations
 import subprocess
 import uuid
 
+import pytest
+
+from jj_sensei import repair
 from jj_sensei.jj import Jj, JjError
 from jj_sensei.repair import (
     EXIT_CLEAN,
@@ -16,11 +19,24 @@ from jj_sensei.repair import (
     StateStore,
     WorkspaceLock,
     converge,
+    has_native_converge,
     run_converge,
     run_repair,
     run_resolve,
 )
 from jj_sensei.setup import run_setup
+
+
+@pytest.fixture
+def native_converge(jj_repo):
+    if not has_native_converge(Jj(jj_repo.root)):
+        pytest.skip("the installed jj has no `jj converge` (added in 0.45)")
+
+
+@pytest.fixture
+def legacy_converge(monkeypatch):
+    """Take the path used on a jj without `jj converge`."""
+    monkeypatch.setattr(repair, "has_native_converge", lambda _jj: False)
 
 
 def test_guarded_helper_exit_status_contract():
@@ -233,7 +249,7 @@ def _make_equivalent_divergence(jj_repo):
     return feature, keeper, loser
 
 
-def test_converge_allows_a_bookmark_on_the_keeper(jj_repo):
+def test_legacy_converge_allows_a_bookmark_on_the_keeper(jj_repo, legacy_converge):
     feature, keeper, _loser = _make_equivalent_divergence(jj_repo)
     jj_repo.run(feature, "bookmark", "create", "kept", "-r", keeper.commit_id)
 
@@ -244,7 +260,7 @@ def test_converge_allows_a_bookmark_on_the_keeper(jj_repo):
     assert jj.one_commit("kept").commit_id == jj.one_commit("@").commit_id
 
 
-def test_converge_entry_point_runs_from_a_feature_workspace(jj_repo):
+def test_legacy_converge_entry_point_runs_from_a_feature_workspace(jj_repo, legacy_converge):
     feature, keeper, _loser = _make_equivalent_divergence(jj_repo)
 
     assert run_converge(feature) == 0
@@ -254,7 +270,7 @@ def test_converge_entry_point_runs_from_a_feature_workspace(jj_repo):
     assert jj.one_commit("@").commit_id == keeper.commit_id
 
 
-def test_converge_pauses_before_abandoning_a_bookmarked_loser(jj_repo):
+def test_legacy_converge_pauses_before_abandoning_a_bookmarked_loser(jj_repo, legacy_converge):
     feature, _keeper, loser = _make_equivalent_divergence(jj_repo)
     jj_repo.run(feature, "bookmark", "create", "needs-decision", "-r", loser.commit_id)
 
@@ -271,7 +287,7 @@ def test_converge_pauses_before_abandoning_a_bookmarked_loser(jj_repo):
     assert jj.one_commit("needs-decision").commit_id == loser.commit_id
 
 
-def test_repair_refuses_different_nonempty_successors(jj_repo, capsys):
+def test_legacy_repair_refuses_different_nonempty_successors(jj_repo, capsys, legacy_converge):
     assert run_setup(jj_repo.root) == 0
     feature = jj_repo.add_workspace("feature")
 
@@ -288,6 +304,108 @@ def test_repair_refuses_different_nonempty_successors(jj_repo, capsys):
     assert "human judgment required" in error
     assert "no later transaction step was attempted" in error.casefold()
     assert Jj(feature).commits("divergent()")
+
+
+def _files(jj_repo, cwd, revision="@"):
+    return jj_repo.run(cwd, "file", "list", "-r", revision).stdout.split()
+
+
+def test_converge_keeps_the_edit_and_the_rebase(jj_repo, native_converge):
+    feature, _keeper, _loser = _make_equivalent_divergence(jj_repo)
+
+    assert run_converge(feature) == EXIT_CLEAN
+
+    assert Jj(feature).commits("divergent()") == []
+    # One candidate held the edit, the other the new parent; neither is dropped.
+    assert _files(jj_repo, feature) == ["f.txt", "precious.txt", "trunk.txt"]
+    assert (feature / "trunk.txt").read_text() == "moved\n"
+
+
+def test_converge_moves_a_bookmark_from_either_candidate_to_the_result(jj_repo, native_converge):
+    feature, keeper, loser = _make_equivalent_divergence(jj_repo)
+    jj_repo.run(feature, "bookmark", "create", "on-edit", "-r", keeper.commit_id)
+    jj_repo.run(feature, "bookmark", "create", "on-empty", "-r", loser.commit_id)
+
+    assert converge(Jj(feature))
+
+    jj = Jj(feature)
+    assert jj.commits("divergent()") == []
+    result = jj.one_commit("@").commit_id
+    assert jj.one_commit("on-edit").commit_id == result
+    assert jj.one_commit("on-empty").commit_id == result
+
+
+def test_repair_merges_different_nonempty_successors(jj_repo, native_converge):
+    assert run_setup(jj_repo.root) == 0
+    feature = jj_repo.add_workspace("feature")
+
+    jj_repo.write(feature, "left.txt", "left side\n")
+    jj_repo.run(feature, "st")
+    jj_repo.write(jj_repo.root, "trunk.txt", "moved\n")
+    jj_repo.commit(jj_repo.root, "move trunk")
+    jj_repo.run(jj_repo.root, "rebase", "-r", "feature@", "-d", "default@-")
+    jj_repo.write(feature, "right.txt", "right side\n")
+
+    assert run_repair(feature) == EXIT_CLEAN
+
+    assert Jj(feature).commits("divergent()") == []
+    assert _files(jj_repo, feature) == ["f.txt", "left.txt", "right.txt", "trunk.txt"]
+
+
+def test_repair_walks_the_conflict_a_convergence_records(jj_repo, native_converge, capsys):
+    assert run_setup(jj_repo.root) == 0
+    feature = jj_repo.add_workspace("feature")
+
+    jj_repo.write(feature, "f.txt", "base\nshared start\n")
+    jj_repo.run(feature, "st")
+    jj_repo.write(jj_repo.root, "f.txt", "base\nfrom default\n")
+    jj_repo.run(jj_repo.root, "restore", "--from", "default@", "--into", "feature@", "f.txt")
+    jj_repo.write(feature, "f.txt", "base\nfrom feature\n")
+
+    assert run_repair(feature) == EXIT_EDIT_REQUIRED
+    assert Jj(feature).commits("divergent()") == []
+    assert "f.txt" in capsys.readouterr().err
+
+    jj_repo.write(feature, "f.txt", "base\nfrom both\n")
+    assert run_repair(feature) == EXIT_CLEAN
+    assert Jj(feature).commits("conflicts()") == []
+
+
+def test_converge_stops_when_jj_needs_a_decision(jj_repo, native_converge, capsys):
+    assert run_setup(jj_repo.root) == 0
+    feature = jj_repo.add_workspace("feature")
+    jj_repo.write(feature, "work.txt", "work\n")
+    jj_repo.run(feature, "describe", "-m", "first wording")
+    jj_repo.run(feature, "describe", "-m", "second wording", "--at-op", "@-")
+
+    assert run_converge(feature) == EXIT_HUMAN_REQUIRED
+
+    error = capsys.readouterr().err
+    assert "description" in error
+    assert "2 successors remain" in error
+    descriptions = {commit.description for commit in Jj(feature).commits("divergent()")}
+    assert descriptions == {"first wording", "second wording"}
+
+
+def test_converge_stops_at_an_immutable_candidate(jj_repo, native_converge, capsys):
+    feature, keeper, _loser = _make_equivalent_divergence(jj_repo)
+    jj_repo.run(feature, "tag", "set", "v1", "-r", keeper.commit_id)
+
+    assert run_converge(feature) == EXIT_HUMAN_REQUIRED
+
+    assert "is immutable" in capsys.readouterr().err
+    assert len(Jj(feature).commits("divergent()")) == 2
+
+
+def test_converge_refuses_a_candidate_another_workspace_is_editing(jj_repo, capsys):
+    feature, keeper, _loser = _make_equivalent_divergence(jj_repo)
+    other = jj_repo.add_workspace("other")
+    jj_repo.run(other, "edit", keeper.commit_id)
+
+    assert run_converge(feature) == EXIT_HUMAN_REQUIRED
+
+    assert "working copies of other workspaces (other)" in capsys.readouterr().err
+    assert len(Jj(feature).commits("divergent()")) == 2
 
 
 def test_failed_jj_step_stops_before_any_followup(tmp_path, monkeypatch, capsys):

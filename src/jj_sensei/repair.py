@@ -142,10 +142,11 @@ def _unlock(stream) -> None:
 
 
 def converge(jj: Jj, *, announce: bool = True) -> bool:
-    """Converge equivalent divergent successors, returning whether work was done."""
-    # Snapshot first: the keeper is chosen from each candidate's `empty`, and an
-    # unsnapshotted edit reads as empty. `repair` happens to snapshot earlier via
-    # `workspace update-stale`, but `converge` is also a documented entry point.
+    """Converge divergent successors of `@`, returning whether work was done."""
+    # Snapshot first: an unsnapshotted edit is invisible to either strategy, and
+    # the fallback reads it as an empty candidate. `repair` happens to snapshot
+    # earlier via `workspace update-stale`, but `converge` is also a documented
+    # entry point.
     current = jj.one_commit("@", snapshot=True)
     safe_revision(current.change_id)
     candidates = jj.commits(f"change_id({current.change_id})")
@@ -155,6 +156,49 @@ def converge(jj: Jj, *, announce: bool = True) -> bool:
         return False
 
     _refuse_foreign_candidates(jj, candidates)
+    if has_native_converge(jj):
+        _converge_natively(jj, current.change_id, announce)
+    else:
+        _keep_equivalent_candidate(jj, current, candidates, announce)
+    return True
+
+
+def has_native_converge(jj: Jj) -> bool:
+    """Whether the installed jj has `jj converge` (0.45 and later)."""
+    return not jj.run("converge", "--help", check=False, ignore_working_copy=True).returncode
+
+
+def _converge_natively(jj: Jj, change_id: str, announce: bool) -> None:
+    """Let jj merge the candidates, and accept nothing short of one successor.
+
+    jj builds the result from the change's evolution, so it keeps both sides'
+    work and the newer parents where picking a survivor would drop one of
+    them. It moves local bookmarks on any candidate to the result, and records
+    a file conflict in it when the sides disagree; the conflict walk owns that.
+    """
+    revset = f"change_id({change_id})"
+    result = jj.run("converge", "--no-interactive", "-r", revset, check=False)
+    output = "\n".join(text.strip() for text in (result.stdout, result.stderr) if text.strip())
+    # Success is the postcondition, not the exit status: jj also exits 0 when
+    # its search space left a candidate out and nothing was converged.
+    remaining = jj.commits(revset)
+    if result.returncode or len(remaining) != 1:
+        raise HumanRequired(
+            f"{output}\n"
+            f"converge: jj did not converge change {change_id[:12]}; {len(remaining)} "
+            "successors remain. jj's reason is above; inspect the candidates and ask how "
+            "they should be combined"
+        )
+    if announce:
+        print(output)
+        if remaining[0].conflict:
+            print("converge: the converged change has file conflicts; run repair to walk them.")
+
+
+def _keep_equivalent_candidate(
+    jj: Jj, current: Commit, candidates: list[Commit], announce: bool
+) -> None:
+    """Before jj 0.45: keep one of provably equivalent candidates, or stop."""
     nonempty = [candidate for candidate in candidates if not candidate.empty]
     if not nonempty:
         keep = current
@@ -189,7 +233,6 @@ def converge(jj: Jj, *, announce: bool = True) -> bool:
     if announce:
         dropped = ", ".join(candidate.commit_id[:12] for candidate in drop) or "none (auto-hidden)"
         print(f"converge: kept {keep.commit_id[:12]}; dropped {dropped}.")
-    return True
 
 
 def _refuse_bookmarked_candidates(jj: Jj, candidates: list[Commit]) -> None:

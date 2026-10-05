@@ -27,7 +27,7 @@ def parser() -> argparse.ArgumentParser:
         help="update stale state, converge divergence, and resolve conflicts",
         description=(
             "Run the resumable one-stop harmony workflow: update a stale workspace, converge "
-            "safe divergent successors, then resolve mutable conflicts oldest-first."
+            "divergent working-copy successors, then resolve mutable conflicts oldest-first."
         ),
     )
     repair.epilog = (
@@ -45,10 +45,11 @@ def parser() -> argparse.ArgumentParser:
     )
     converge = commands.add_parser(
         "converge",
-        help="converge equivalent divergent working-copy successors",
+        help="converge divergent working-copy successors",
         description=(
-            "Keep the sole nonempty or one of the byte-identical divergent working-copy "
-            "successors; refuse ambiguous work."
+            "Merge the divergent working-copy successors with `jj converge --no-interactive` "
+            "and require one successor afterwards. On a jj older than 0.45, keep the sole "
+            "nonempty or one of the byte-identical successors and refuse ambiguous work."
         ),
     )
     converge.epilog = (

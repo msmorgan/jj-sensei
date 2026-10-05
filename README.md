@@ -77,12 +77,12 @@ docs-only copies can carry a `.jj-version` sidecar.
 `harmony` handles messy states that otherwise become long, fragile runbooks:
 stale workspaces, divergent working-copy successors, and file conflicts. A
 compact diagnosis router discloses only the affected branch. Its one-stop
-repair command updates stale state, converges only equivalent divergence, and
-walks mutable conflicts oldest to newest.
+repair command updates stale state, converges divergent working-copy
+successors through `jj converge`, and walks mutable conflicts oldest to newest.
 
 Repair is locked and crash-resumable: it journals completed transitions,
-automates only resolutions it can establish are safe, and pauses with a
-useful diagnosis when needed. Narrower tools inspect conflict markers,
+leaves merging divergent work to jj, automates only the conflict resolutions
+it can establish are safe, and pauses with a useful diagnosis when needed. Narrower tools inspect conflict markers,
 accept a specifically chosen representation, and run conservative mechanical
 resolutions.
 
