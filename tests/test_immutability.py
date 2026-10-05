@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 from jj_sensei.immutability import (
     DECODE_HINT,
     active_definition,
+    builtin_clauses,
     clauses,
     explain,
     render,
@@ -37,6 +39,31 @@ def test_clauses_expand_the_builtin_umbrella_alias():
     ]
     assert expanded[0].origin == "builtin_immutable_heads()"
     assert expanded[3].origin is None
+
+
+def test_clauses_expand_the_builtin_alias_into_the_given_terms():
+    expanded = clauses("builtin_immutable_heads()", ("trunk()", "untracked_remote_tags()"))
+
+    assert [clause.label for clause in expanded] == [
+        "trunk() (via builtin_immutable_heads())",
+        "untracked_remote_tags() (via builtin_immutable_heads())",
+    ]
+
+
+def test_builtin_clauses_come_from_the_installed_jj(jj_repo):
+    jj = Jj(jj_repo.root)
+    installed = jj.run("config", "get", "revset-aliases.'builtin_immutable_heads()'").stdout
+
+    assert builtin_clauses(jj) == tuple(split_union(installed))
+    assert {"trunk()", "tags()", "untracked_remote_bookmarks()"} <= set(builtin_clauses(jj))
+
+
+def test_builtin_clauses_fall_back_when_jj_cannot_report_them(jj_repo, monkeypatch):
+    jj = Jj(jj_repo.root)
+    failed = subprocess.CompletedProcess([], 1, "", "no such config")
+    monkeypatch.setattr(jj, "run", lambda *args, **kwargs: failed)
+
+    assert builtin_clauses(jj) == ("trunk()", "tags()", "untracked_remote_bookmarks()")
 
 
 def test_active_definition_falls_back_to_the_builtin_alias(jj_repo):

@@ -34,6 +34,9 @@ jj --no-pager tag untrack v1.0.0@origin
 Tracking governs visibility and remote deletion. `jj --no-pager tag list`
 hides untracked remote tags and usually hides a tracked counterpart already at
 the local target; differing local and remote targets render as a conflict.
+Untracking does not release history: since jj 0.45 the default
+`immutable_heads()` includes `untracked_remote_tags()`, so an untracked remote
+tag still keeps its ancestors immutable.
 
 ## Delete
 

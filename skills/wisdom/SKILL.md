@@ -83,7 +83,8 @@ editor-avoidance requirement.
 **Use non-interactive forms exclusively.** Commands that require an editor or
 terminal UI are unavailable: interactive `split`/`squash`/`absorb` (`-i`, or
 `split` with no fileset), `diffedit`, `resolve` without `--tool`, `arrange`,
-`config edit`, and bare `describe`/`commit` without `-m`. Use these forms:
+`converge` without `--no-interactive`, `config edit`, and bare
+`describe`/`commit` without `-m`. Use these forms:
 a `FILESET` argument to `split`/`squash`, `-m`/`-u` for descriptions,
 hand-edited conflict markers for `resolve`, and `jj --no-pager config set
 --repo KEY VALUE` (or `--user`) for `config edit`. A fileset selects whole
@@ -117,12 +118,13 @@ a ref is not in jj's output, it does not exist.
 
 **Mutability is decided by `immutable_heads()`.** jj treats
 `::(immutable_heads() | root())` as immutable and refuses to rewrite it; by
-default that is `trunk() | tags() | untracked_remote_bookmarks()`. A repo may
-extend it, so read the active definition rather than assume: `jj --no-pager
-config get "revset-aliases.'immutable_heads()'"`. A repo that has never
-configured this still answers — `builtin_immutable_heads()` **is** the
-unmodified default, not a sign that something is missing. Only a definition
-naming something else has been customized.
+default that is `trunk() | tags() | untracked_remote_bookmarks()`, plus
+`untracked_remote_tags()` since jj 0.45. A repo may extend it, so read the
+active definition rather than assume: `jj --no-pager config get
+"revset-aliases.'immutable_heads()'"`. A repo that has never configured this
+still answers — `builtin_immutable_heads()` **is** the unmodified default, not
+a sign that something is missing. Only a definition naming something else has
+been customized.
 
 **Apply these hard guardrails:**
 

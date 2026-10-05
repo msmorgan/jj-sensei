@@ -13,6 +13,9 @@ from .jj import Jj, JjError, safe_revision
 
 _ALIAS_KEY = "revset-aliases.'immutable_heads()'"
 _BUILTIN = "builtin_immutable_heads()"
+_BUILTIN_KEY = "revset-aliases.'builtin_immutable_heads()'"
+# What the umbrella alias held through jj 0.44; only used when the installed jj
+# will not say what it holds now.
 _BUILTIN_CLAUSES = ("trunk()", "tags()", "untracked_remote_bookmarks()")
 _ANCHOR_TEMPLATE = (
     "concat("
@@ -151,17 +154,28 @@ def active_definition(jj: Jj) -> str:
     return " ".join(result.stdout.split())
 
 
-def clauses(definition: str) -> list[Clause]:
+def builtin_clauses(jj: Jj) -> tuple[str, ...]:
+    """Read the terms of the installed jj's `builtin_immutable_heads()`.
+
+    The set grows between releases — 0.45 added `untracked_remote_tags()` — so
+    ask jj rather than name a clause it may not have yet, or miss one it does.
+    """
+    result = jj.run("config", "get", _BUILTIN_KEY, check=False, ignore_working_copy=True)
+    terms = () if result.returncode else tuple(unwrap(term) for term in split_union(result.stdout))
+    return terms or _BUILTIN_CLAUSES
+
+
+def clauses(definition: str, builtin: tuple[str, ...] = _BUILTIN_CLAUSES) -> list[Clause]:
     """Break a definition into separately testable terms.
 
-    `builtin_immutable_heads()` is expanded so a report can name `trunk()`
-    rather than the umbrella alias that contains it.
+    `builtin_immutable_heads()` is expanded into `builtin` so a report can name
+    `trunk()` rather than the umbrella alias that contains it.
     """
     result: list[Clause] = []
     for term in split_union(definition):
         text = unwrap(term)
         if text == _BUILTIN:
-            result.extend(Clause(builtin, _BUILTIN) for builtin in _BUILTIN_CLAUSES)
+            result.extend(Clause(term, _BUILTIN) for term in builtin)
         else:
             result.append(Clause(text))
     return result
@@ -200,7 +214,9 @@ def _anchors(jj: Jj, clause: Clause, change_id: str) -> tuple[Anchor, ...] | Non
 
 def explain(jj: Jj, revset: str, definition: str | None = None) -> list[Verdict]:
     """Report every revision selected by `revset` and why it is immutable."""
-    terms = clauses(definition if definition is not None else active_definition(jj))
+    terms = clauses(
+        definition if definition is not None else active_definition(jj), builtin_clauses(jj)
+    )
     verdicts: list[Verdict] = []
     for commit in jj.commits(revset):
         captures: list[Capture] = []
