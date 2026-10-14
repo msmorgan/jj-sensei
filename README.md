@@ -174,6 +174,12 @@ codex plugin marketplace add msmorgan/marketplace
 codex plugin add jj-sensei@msmorgan
 ```
 
+### OpenCode
+
+```bash
+opencode plugin add github:msmorgan/jj-sensei
+```
+
 Start a new session after installing or updating the plugin.
 
 ## Repository layout
@@ -187,6 +193,9 @@ plugin.json                 Antigravity plugin manifest
 hooks.json                  Antigravity hook manifest
 .claude-plugin/plugin.json  Claude Code plugin manifest
 .codex-plugin/plugin.json   Codex plugin manifest
+package.json                OpenCode package manifest
+index.js                    OpenCode directory entrypoint
+.opencode/plugins/          OpenCode plugin implementation
 hooks/hooks.json            hook manifest for Claude Code and Codex
 hooks/                      startup guidance and live status hook scripts
 skills/                     the four skills above, loaded by every host

@@ -15,6 +15,7 @@ PLUGIN_MANIFESTS = {
     "Antigravity": "plugin.json",
     "Claude Code": ".claude-plugin/plugin.json",
     "Codex": ".codex-plugin/plugin.json",
+    "OpenCode": "package.json",
 }
 
 

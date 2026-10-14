@@ -1,0 +1,10 @@
+{
+  "name": "jj-sensei",
+  "version": "0.3.10",
+  "description": "Jujutsu startup fluency, live status, installed help, guarded history shaping, workspace isolation, and resumable repair",
+  "type": "module",
+  "main": ".opencode/plugins/jj-sensei.js",
+  "exports": {
+    ".": "./.opencode/plugins/jj-sensei.js"
+  }
+}
