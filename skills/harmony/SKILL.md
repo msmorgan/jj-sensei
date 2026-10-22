@@ -51,13 +51,16 @@ many, at `@` or in an ancestor:
      says which section is which side.
    - Take one side for the whole file, where `SIDE` is `snapshot`, `diff`,
      or `base`: `"<skill-dir>/scripts/conflicts" accept FILE SIDE`.
+   - A generated file: take one side with `accept`, then rerun its generator
+     instead of merging markers. [Generated files](references/conflicts.md#generated-files)
+     has the procedure.
 4. Rerun `repair` after each round; it resumes from its journal. Exit `0` means
    every resolution is folded into its conflicted change and `@` is back on the
    original tip. Continue to [Verify](#5-verify).
 
 Load [conflict edge cases](references/conflicts.md) for a deletion conflict,
-two pure additions to stack, the automatic resolver run directly, or a
-conflicted change outside `::@`.
+two pure additions to stack, generated files, the automatic resolver run
+directly, or a conflicted change outside `::@`.
 
 ## 4. Run the repair helper
 

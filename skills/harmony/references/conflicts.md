@@ -32,6 +32,24 @@ additions in either order:
 "<skill-dir>/scripts/conflicts" accept FILE stack-snap-first
 ```
 
+## Generated files
+
+Generated-file markers are never hand-merged: the merge is meaningless until
+the generator runs again. For each generated path:
+
+1. Take either side to clear the markers: `"<skill-dir>/scripts/conflicts"
+   accept FILE snapshot`.
+2. Rerun the generator over the resolved sources. Generators can outlast a
+   tool timeout (one ran ~20 minutes), so run them in the background or with
+   the maximum timeout, and wait for exit `0`. A timeout (exit 143) leaves the
+   output stale; rerun it.
+3. Regenerate every generated file the resolved sources feed, not only the
+   conflicted one: a sibling output left stale fails later checks.
+
+Which files are generated, and the command that rebuilds each, belongs in the
+consuming repository's `CLAUDE.md` or `AGENTS.md`. Read it there; when it is
+silent, ask the user rather than guess.
+
 ## Preview the automatic resolver
 
 `repair` already applies the conservative resolver. To preview or apply it
