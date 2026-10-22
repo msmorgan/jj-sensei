@@ -42,7 +42,7 @@ editor-avoidance requirement.
 | jj printed | Go to |
 |---|---|
 | `??` after a bookmark name, or `(conflicted)` in `jj bookmark list` | [Reconcile a conflicted bookmark](references/shipping/bookmark-conflicts.md) |
-| `(conflict)` on a revision, `×` in the log graph, `<<<<<<<` in a file | `harmony` skill |
+| `(conflict)` on a revision, `×` in the log graph, `<<<<<<<` in a file | `harmony` skill, Resolve conflicts |
 | `Error: The working copy is stale` | `harmony` skill |
 | `(divergent)`, or a change ID with a `/0`/`/1` suffix | `harmony` for this workspace's divergent working copy; otherwise `knowledge` for `rtfd docs/guides/divergence` |
 | An immutability refusal | [Immutable-target triage](references/undoing.md#immutable-target-triage) |
@@ -74,7 +74,8 @@ editor-avoidance requirement.
 | reconstruct an oversized `@` into a series | [Reconstruct work with evolog](references/using-evolog.md) |
 | restore a described change to one of its own snapshots | [Restore a change to one of its own snapshots](references/using-evolog.md#restore-a-change-to-one-of-its-own-snapshots) |
 | build an intermediate state selection cannot express | [Interpolate a change](references/interpolate.md) |
-| conflicts / stale workspace / divergence / recover a file from a snapshot | `harmony` skill |
+| resolve conflicts | `harmony` skill, Resolve conflicts |
+| stale workspace / divergence / recover a file from a snapshot | `harmony` skill |
 | add or audit a workspace / multi-workspace immutability | `boundaries` skill |
 | uncertain flag or semantics / no matching row | `knowledge` skill |
 

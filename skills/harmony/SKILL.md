@@ -21,9 +21,9 @@ read-only evidence or load `knowledge` before choosing a repair.
 
 ## 2. Route
 
-| State or request | Reference |
+| State or request | Procedure |
 |---|---|
-| One conflict with known intended content, or any conflict-marker work | [Resolve file conflicts](references/conflicts.md) |
+| `(conflict)` on a revision, `×` in the log graph, `<<<<<<<` in a file | [Resolve conflicts](#3-resolve-conflicts), below |
 | `Error: The working copy is stale` | [Realign a stale workspace](references/stale.md) |
 | Divergent successors of this workspace's working copy | [Converge working-copy successors](references/divergence.md) |
 | Divergence elsewhere in the graph | `knowledge`: `rtfd docs/guides/divergence` |
@@ -33,18 +33,41 @@ read-only evidence or load `knowledge` before choosing a repair.
 Load every matched branch and no unrelated branch. If command or marker
 semantics remain uncertain, load `knowledge` and query the installed manual.
 
-## 3. Apply the narrow repair
+## 3. Resolve conflicts
 
-For one diagnosed conflict whose intended content is known, follow the
-conflict reference and stop after its verification gate. For several
-conflicts, a stale workspace, or working-copy divergence, run the resumable
-repair helper from the affected workspace:
+A conflict lives in the oldest conflicted revision. Its descendants show the
+same markers, but editing them at `@` resolves only `@`. `repair` walks the
+conflicted revisions oldest-first, so it is the entry point for one conflict or
+many, at `@` or in an ancestor:
+
+1. Find where it lives: the oldest change in `jj --no-pager log -r
+   'conflicts()' -T builtin_log_oneline`.
+2. Run `"<skill-dir>/scripts/repair"` from the affected workspace. It moves
+   onto the oldest mutable conflicted change, applies proven-safe hunks, and
+   exits `1` listing each remaining marker as `file:line` with its hunk.
+3. Settle every listed file, one way per file:
+   - Replace each whole marker block, markers included, with the intended
+     content using the file-editing tool. [Read jj conflict markers](references/markers.md)
+     says which section is which side.
+   - Take one side for the whole file, where `SIDE` is `snapshot`, `diff`,
+     or `base`: `"<skill-dir>/scripts/conflicts" accept FILE SIDE`.
+4. Rerun `repair` after each round; it resumes from its journal. Exit `0` means
+   every resolution is folded into its conflicted change and `@` is back on the
+   original tip. Continue to [Verify](#5-verify).
+
+Load [conflict edge cases](references/conflicts.md) for a deletion conflict,
+two pure additions to stack, the automatic resolver run directly, or a
+conflicted change outside `::@`.
+
+## 4. Run the repair helper
+
+For a stale workspace or working-copy divergence, run `repair` after its
+reference; it realigns and converges before its conflict walk. Run it bare so
+its exit status remains visible:
 
 ```bash
 "<skill-dir>/scripts/repair"
 ```
-
-Run it bare so its exit status remains visible:
 
 - `0` — clean; rerun the operation that exposed the problem.
 - `1` — edit every marker the helper listed, then rerun `repair`.
@@ -65,10 +88,11 @@ Use narrower helpers only after diagnosis establishes their exact scope:
 "<skill-dir>/scripts/resolve"   # conflict walk only
 ```
 
-## 4. Verify
+## 5. Verify
 
 Repair is complete only when the original operation succeeds, `jj --no-pager
-log -r 'conflicts()' -T builtin_log_oneline` is empty, and the relevant project
-tests pass after content changed. Report any remaining stale, divergent,
-conflicted, or judgment-required state rather than treating a partial repair
-as success.
+log -r 'conflicts()' -T builtin_log_oneline` is empty, and, after content
+changed, each resolved change's `jj --no-pager diff --git -r CHANGE` expresses
+the intended content and the relevant project tests pass. Report any
+remaining stale, divergent, conflicted, or judgment-required state rather than
+treating a partial repair as success.
