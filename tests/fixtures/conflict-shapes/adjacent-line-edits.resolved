@@ -1,0 +1,5 @@
+def kind(node):
+    match node:
+        case Named(_, _, target): return target.kind
+        case Bound(n) | Becomes(n): return n.kind
+        case _: return None

@@ -10,7 +10,7 @@ import sys
 import tempfile
 import time
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from . import conflicts
@@ -52,6 +52,9 @@ class ResolutionState:
     tip_original_description: str = ""
     tip_requires_pin: bool = False
     tip_pinned: bool = False
+    # Hunks `auto` merged during this run, listed again whenever repair stops or
+    # finishes so none is folded into history unseen.
+    auto_merged: list[str] = field(default_factory=list)
 
 
 class StateStore:
@@ -286,6 +289,7 @@ def resolve_conflicts(jj: Jj, store: StateStore) -> int:
             _unpin_tip(jj, store, state)
             store.clear()
             print("repair: all conflicts resolved; workspace is clean.")
+            _print_auto_merged(state)
             return EXIT_CLEAN
 
         if state.phase == "start_pending":
@@ -366,6 +370,7 @@ def _start_next_conflict(
             else current.empty and not current.description
         ),
         tip_pinned=previous.tip_pinned if previous is not None else False,
+        auto_merged=list(previous.auto_merged) if previous is not None else [],
     )
     store.save(state)
     return state
@@ -428,8 +433,11 @@ def _finish_edit(
 
     files = jj.conflict_files()
     if files:
-        resolved, _left = _auto_resolve(jj.workspace_root(), files)
-        if resolved:
+        merged = _auto_resolve(jj.workspace_root(), files)
+        if merged:
+            change = state.target_change_id[:12]
+            state.auto_merged.extend(f"{entry} in change {change}" for entry in merged)
+            store.save(state)
             files = jj.conflict_files()
     if files:
         print("repair: stopped for manual conflict resolution.", file=sys.stderr)
@@ -440,6 +448,7 @@ def _finish_edit(
             "No lock is held while you edit.",
             file=sys.stderr,
         )
+        _print_auto_merged(state, stream=sys.stderr)
         return EXIT_EDIT_REQUIRED, state
 
     target = _one_by_change_id(jj, state.target_change_id)
@@ -556,16 +565,30 @@ def _one_by_change_id(jj: Jj, change_id: str) -> Commit:
     return commits[0]
 
 
-def _auto_resolve(root: Path, files: list[str]) -> tuple[int, int]:
+def _auto_resolve(root: Path, files: list[str]) -> list[str]:
+    """Merge what `conflicts auto` can prove safe; return where each merge landed."""
     total_resolved = total_left = 0
-    print("repair: trying conservative sorted-addition resolution:")
+    merged: list[str] = []
+    print("repair: trying conservative automatic resolution:")
     for filename in files:
         path = root / filename
-        resolved, left = conflicts._auto_resolve_file(path, filename, dry=False)
+        resolved, left = conflicts._auto_resolve_file(path, filename, dry=False, merged=merged)
         total_resolved += resolved
         total_left += left
     print(f"  resolved {total_resolved} hunk(s), {total_left} left for review")
-    return total_resolved, total_left
+    return merged
+
+
+def _print_auto_merged(state: ResolutionState, stream=None) -> None:
+    if not state.auto_merged:
+        return
+    print(
+        "repair: these hunks were merged automatically; read each in its change "
+        "(`jj --no-pager diff --git -r CHANGE`) and fix any that are wrong:",
+        file=stream,
+    )
+    for entry in state.auto_merged:
+        print(f"  {entry}", file=stream)
 
 
 def _print_marker_locations(root: Path, files: list[str]) -> None:

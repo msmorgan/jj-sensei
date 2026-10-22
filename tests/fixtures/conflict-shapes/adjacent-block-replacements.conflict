@@ -1,0 +1,17 @@
+commands = []
+<<<<<<< conflict 1 of 1
+%%%%%%% diff from: qpvuntsm 1a2b3c4d "base" (parents of rebased revision)
+\\\\\\\        to: rlvkpnrz 5e6f7a8b "feature" (rebased revision)
+-stub("note", "Notes are not implemented.")
++@group
++def note():
++    """Post and read notes."""
+ stub("lease", "Leases are not implemented.")
++++++++ zsuskuln 9c0d1e2f "trunk" (rebase destination)
+stub("note", "Notes are not implemented.")
+@group
+def lease():
+    """Request and release leases."""
+>>>>>>> conflict 1 of 1 ends
+
+main()

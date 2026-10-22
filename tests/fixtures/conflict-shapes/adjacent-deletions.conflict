@@ -1,0 +1,11 @@
+UNIMPLEMENTED = [
+<<<<<<< conflict 1 of 1
++++++++ zsuskuln 9c0d1e2f "trunk" (rebase destination)
+    ("lease", "request"),
+%%%%%%% diff from: qpvuntsm 1a2b3c4d "base" (parents of rebased revision)
+\\\\\\\        to: rlvkpnrz 5e6f7a8b "feature" (rebased revision)
+     ("note",),
+     ("note", "post"),
+-    ("lease", "request"),
+>>>>>>> conflict 1 of 1 ends
+]

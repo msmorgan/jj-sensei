@@ -1,0 +1,10 @@
+fn counts() {
+<<<<<<< conflict 1 of 1
+%%%%%%% diff from: qpvuntsm 1a2b3c4d "base" (parents of rebased revision)
+\\\\\\\        to: rlvkpnrz 5e6f7a8b "feature" (rebased revision)
+-    assert_eq!(declarations.len(), 66 + 201);
++    assert_eq!(declarations.len(), 66 + 207);
++++++++ zsuskuln 9c0d1e2f "trunk" (rebase destination)
+    assert_eq!(declarations.len(), 66 + 202);
+>>>>>>> conflict 1 of 1 ends
+}

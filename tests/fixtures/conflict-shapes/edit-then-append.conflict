@@ -1,0 +1,13 @@
+enum Class {
+<<<<<<< conflict 1 of 1
++++++++ zsuskuln 9c0d1e2f "trunk" (rebase destination)
+    Cost, Ability, Condition }
+table bare_use(Class) -> Selection {
+    (Nullary) => Yes, (Amount) => Yes,
+}
+%%%%%%% diff from: qpvuntsm 1a2b3c4d "base" (parents of rebased revision)
+\\\\\\\        to: rlvkpnrz 5e6f7a8b "feature" (rebased revision)
+-    Cost, Ability, Condition }
++    Cost, QualityAmount, Ability, Condition }
+>>>>>>> conflict 1 of 1 ends
+

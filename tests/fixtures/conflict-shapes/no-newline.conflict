@@ -1,0 +1,11 @@
+a
+<<<<<<< conflict 1 of 1
+%%%%%%% diff from: urywlymx f4dfc380 "base" (no terminating newline)
+\\\\\\\        to: onwxutpt 328d045b "A" (no terminating newline)
+-b
++B
+ c
++++++++ mmusmzyo 444cd3f3 "B" (no terminating newline)
+b
+C
+>>>>>>> conflict 1 of 1 ends

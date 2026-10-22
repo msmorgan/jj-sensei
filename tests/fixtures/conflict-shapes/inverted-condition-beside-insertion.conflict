@@ -1,0 +1,11 @@
+def handle(user, req):
+    audit(req)
+<<<<<<< conflict 1 of 1
++++++++ zsuskuln 9c0d1e2f "trunk" (rebase destination)
+    if not user.is_admin and req.method == "POST":
+%%%%%%% diff from: qpvuntsm 1a2b3c4d "base" (parents of rebased revision)
+\\\\\\\        to: rlvkpnrz 5e6f7a8b "feature" (rebased revision)
+     if user.is_admin and req.method == "POST":
++        grant_superuser(user)
+>>>>>>> conflict 1 of 1 ends
+        commit(req)

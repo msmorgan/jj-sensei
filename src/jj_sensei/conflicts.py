@@ -17,6 +17,10 @@ jj-sensei conflict helper for jj repos using the default diff+snapshot marker fo
   scripts/conflicts accept FILE snapshot|diff|base|stack|stack-snap-first|sort
       Resolve every supported hunk in FILE by choosing a side, composing pure
       additions, or conservatively merging additions to a sorted list.
+
+  scripts/conflicts auto [--dry-run] [FILE ...]
+      Resolve only hunks whose line merge is provably safe: two additions to a
+      sorted list, or two sides whose edits touch but never overlap.
 """
 
 import argparse
@@ -346,6 +350,117 @@ def _sorted_merge_resolution(hunk, lines):
     return new_virtual, len(merged) - len(run)
 
 
+# An edit replaces base[start:end] with `lines`; start == end is an insertion.
+# jj reports edits that merely *touch* as a conflict, the shape agents met most
+# often: one side edits line N, the other line N+1. Two sides' edits compose
+# without a choice when no base line is changed by both and no point receives
+# insertions from both. That is necessary but not sufficient: a line inserted
+# beside the other side's change was written next to a line that is gone or
+# different, and no textual measure can tell whether it still belongs there
+# (a comment beside a call whose arguments flipped, a body line under a negated
+# condition). So two touching edits compose only when neither inserts lines:
+# both replace n lines with n, or one is a pure deletion.
+
+
+def _side_edits(base, side):
+    matcher = SequenceMatcher(a=base, b=side, autojunk=False)
+    return [
+        (i1, i2, tuple(side[j1:j2]))
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes()
+        if tag != "equal"
+    ]
+
+
+def _inserts_lines(edit):
+    """Whether an edit adds lines beyond a line-for-line rewrite of its range.
+
+    A replace of n lines by m > n hides an insertion whose position inside the
+    range is unknown, so it counts as one.
+    """
+    start, end, lines = edit
+    return len(lines) > end - start
+
+
+def _line_for_line_or_deletion(edit):
+    start, end, lines = edit
+    return len(lines) in (0, end - start)
+
+
+def _inside(insertion, change):
+    return insertion[0] == insertion[1] and change[0] < insertion[0] < change[1]
+
+
+def _clash(ours, theirs):
+    """Why two edits from different sides cannot both apply, or None."""
+    our_start, our_end, _ = ours
+    their_start, their_end, _ = theirs
+    if our_start == our_end == their_start == their_end:
+        return "both sides insert at the same point"
+    if _inside(ours, theirs) or _inside(theirs, ours):
+        return "an insertion lands inside the other side's change"
+    if our_start < their_end and their_start < our_end:
+        return "both sides change the same line"
+    if our_end != their_start and their_end != our_start:
+        return None  # an unchanged base line separates them
+    if _inserts_lines(ours) or _inserts_lines(theirs):
+        return "a side inserts lines beside the other side's change"
+    if not (_line_for_line_or_deletion(ours) and _line_for_line_or_deletion(theirs)):
+        return "a side shortens lines beside the other side's change"
+    return None
+
+
+def _disjoint_resolution(hunk):
+    """Compose two sides whose edits touch but never overlap or insert.
+
+    Return (resolution_lines, info) on success, else (None, reason).
+    """
+    if not hunk.get("supported"):
+        reason = "many-sided conflict" if hunk.get("many_sided") else "unsupported marker style"
+        return None, reason
+    if any("(no terminating newline)" in line for line in hunk["raw"]):
+        return None, "no-newline at EOF"
+
+    base = hunk["diff_base"]
+    # Each side is re-diffed against the base. That alignment is unique only if
+    # every base line is distinct and no side adds a copy of one; otherwise a
+    # change could be read at more than one position.
+    if len(set(base)) != len(base):
+        return None, "base region repeats a line"
+    edits = []
+    for side in (hunk["diff_side"], hunk["snapshot"]):
+        side_edits = _side_edits(base, side)
+        if not side_edits:
+            return None, "one side leaves the region unchanged"
+        if any(set(lines) & set(base) for _, _, lines in side_edits):
+            return None, "a side adds a line the base region already has"
+        edits.append(side_edits)
+
+    # The same edit made on both sides is made once.
+    shared = set(edits[0]) & set(edits[1])
+    ours = [edit for edit in edits[0] if edit not in shared]
+    theirs = [edit for edit in edits[1] if edit not in shared]
+
+    for our_edit in ours:
+        for their_edit in theirs:
+            reason = _clash(our_edit, their_edit)
+            if reason:
+                return None, reason
+    # A line both sides write, other than through one shared edit, would appear
+    # twice: a double `release()`, or the same fix made in two places.
+    our_lines = {line for _, _, lines in ours for line in lines}
+    if any(line in our_lines for _, _, lines in theirs for line in lines):
+        return None, "both sides add the same line"
+
+    resolution, position = [], 0
+    for start, end, lines in sorted(ours + theirs + list(shared), key=lambda e: (e[0], e[1])):
+        resolution.extend(base[position:start])
+        resolution.extend(lines)
+        position = end
+    resolution.extend(base[position:])
+    changed = len(ours) + len(theirs) + len(shared)
+    return resolution, f"{changed} non-overlapping edit(s)"
+
+
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
@@ -368,13 +483,67 @@ def _resolve_path(filepath):
 # answer is to regenerate it. Names, not contents, because a half-merged lockfile
 # is indistinguishable from a hand-written sorted list.
 _GENERATED_NAMES = frozenset(
-    {"package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "bun.lockb", "go.sum"}
+    {
+        "package-lock.json",
+        "npm-shrinkwrap.json",
+        "pnpm-lock.yaml",
+        "bun.lockb",
+        "go.sum",
+        "go.work.sum",
+        ".terraform.lock.hcl",
+        "gradle.lockfile",
+        "packages.lock.json",
+        "Package.resolved",
+    }
 )
+_BUILT_SUFFIXES = (".min.js", ".min.css")
+
+
+# Generators conventionally say so near the top of the file. Repo-specific
+# generated files with no such header cannot be recognised here.
+_GENERATED_HEADER = re.compile(
+    r"@generated|\bdo not edit\b|\bauto-?generated\b|\bautomatically generated\b",
+    re.IGNORECASE,
+)
+_GENERATED_HEADER_LINES = 10
 
 
 def _is_generated(path):
     name = Path(path).name
     return name.endswith(".lock") or name in _GENERATED_NAMES
+
+
+def _side_texts(path):
+    """The conflicted file as it reads on each side, markers removed."""
+    hunks, lines = parse_file(path)
+    texts = []
+    for key in ("diff_base", "diff_side", "snapshot"):
+        text, position = [], 0
+        for hunk in hunks:
+            text.extend(lines[position : hunk["_start"]])
+            text.extend(hunk[key])
+            position = hunk["_end"] + 1
+        text.extend(lines[position:])
+        texts.append(text)
+    return texts
+
+
+def _generated_reason(path):
+    """Why `path` must be regenerated rather than merged, or None."""
+    if _is_generated(path):
+        return "generated file — regenerate it from its manifest"
+    if Path(path).name.endswith(_BUILT_SUFFIXES):
+        return "built file — rebuild it from its source"
+    try:
+        # A conflict near the top pushes the header down the raw file, so read
+        # it as each side has it.
+        texts = _side_texts(Path(path))
+    except (OSError, UnicodeError):
+        return None
+    for text in texts:
+        if any(_GENERATED_HEADER.search(line) for line in text[:_GENERATED_HEADER_LINES]):
+            return "generated file, its header says so — regenerate it"
+    return None
 
 
 def _resolve_targets(files):
@@ -471,8 +640,11 @@ def cmd_accept(args):
         print(f"Not found: {filepath}", file=sys.stderr)
         return 1
     if side == "sort":
-        resolved, left = _auto_resolve_file(path, filepath, dry=False)
-        _auto_summary(resolved, left, dry=False)
+        merged = []
+        resolved, left = _auto_resolve_file(
+            path, filepath, dry=False, disjoint=False, merged=merged
+        )
+        _auto_summary(resolved, left, dry=False, merged=merged)
         return 0
     hunks, lines = parse_file(path)
     if not hunks:
@@ -522,24 +694,75 @@ def cmd_accept(args):
     return 1 if skipped else 0
 
 
-def _auto_summary(resolved, left, dry):
+def _auto_summary(resolved, left, dry, merged=()):
     print("  ---")
     suffix = " (dry-run, nothing written)" if dry else ""
     print(f"  resolved {resolved} hunk(s), {left} left for review{suffix}")
     if resolved:
         # The guards prove the lines merge, not that the merge means anything.
         print("  A ✓ means the lines merged safely, not that the result is right — read the diff.")
+    print_merged(merged, dry=dry)
 
 
-def _report(filepath, hunk, status, msg):
-    label = "sorted-merge ✓" if status == "ok" else "left"
+def print_merged(merged, *, dry=False, stream=None):
+    """List every auto-merged hunk so none is folded in unseen."""
+    if not merged:
+        return
+    heading = "would be auto-merged" if dry else "auto-merged; inspect each before continuing"
+    print(f"  Hunks {heading}:", file=stream)
+    for entry in merged:
+        print(f"    {entry}", file=stream)
+
+
+def _merged_entry(filepath, old_lines, new_lines, strategy):
+    """Name where a merge landed in the rewritten file, as FILE:FIRST-LAST."""
+    prefix = 0
+    limit = min(len(old_lines), len(new_lines))
+    while prefix < limit and old_lines[prefix] == new_lines[prefix]:
+        prefix += 1
+    suffix = 0
+    while suffix < limit - prefix and old_lines[-1 - suffix] == new_lines[-1 - suffix]:
+        suffix += 1
+    first, last = prefix + 1, len(new_lines) - suffix
+    if last < first:
+        return f"{filepath}:{first} ({strategy}; the hunk resolved to no lines)"
+    return f"{filepath}:{first}-{last} ({strategy})"
+
+
+def _report(filepath, hunk, label, msg):
     print(f"  {filepath} hunk {hunk['hunk']}/{hunk['total']}: {label} ({msg})")
 
 
-def _auto_resolve_file(path, filepath, dry):
-    """Resolve every qualifying hunk in one file. Returns (resolved, left)."""
-    if _is_generated(path):
-        print(f"  {filepath}: left (generated file — regenerate it from its manifest)")
+def _qualifying_resolution(hunk, lines, disjoint):
+    """Try each conservative strategy. Returns (new_lines, label, info)."""
+    new_lines, sorted_info = _sorted_merge_resolution(hunk, lines)
+    if new_lines is not None:
+        return new_lines, "sorted-merge ✓", f"{sorted_info} adds"
+    if not disjoint:
+        return None, "left", sorted_info
+    resolution, disjoint_info = _disjoint_resolution(hunk)
+    if resolution is not None:
+        new_lines = lines[: hunk["_start"]] + resolution + lines[hunk["_end"] + 1 :]
+        return new_lines, "disjoint-merge ✓", disjoint_info
+    reason = disjoint_info
+    if sorted_info != disjoint_info:
+        reason = f"{disjoint_info}; sorted-merge: {sorted_info}"
+    if hunk.get("stackable"):
+        reason += "; if the order is known, accept stack or stack-snap-first"
+    return None, "left", reason
+
+
+def _auto_resolve_file(path, filepath, dry, disjoint=True, merged=None):
+    """Resolve every qualifying hunk in one file. Returns (resolved, left).
+
+    `disjoint=False` restricts it to sorted-list additions (`accept FILE sort`).
+    Each merged hunk's location is appended to `merged` when it is given.
+    """
+    if merged is None:
+        merged = []
+    generated = _generated_reason(path)
+    if generated:
+        print(f"  {filepath}: left ({generated})")
         return 0, 1
     resolved = left = 0
     declined = set()  # raw-text signatures of hunks we've already left
@@ -554,18 +777,21 @@ def _auto_resolve_file(path, filepath, dry):
             break
         progressed = False
         for h in pending:
-            new_lines, info = _sorted_merge_resolution(h, lines)
+            new_lines, label, info = _qualifying_resolution(h, lines, disjoint)
             if new_lines is None:
-                _report(filepath, h, "left", info)
+                _report(filepath, h, label, info)
                 declined.add("".join(h["raw"]))
                 left += 1
                 continue
-            _report(filepath, h, "ok", f"{info} adds")
+            _report(filepath, h, label, info)
             resolved += 1
+            strategy = label.removesuffix(" ✓")
             if dry:
                 # Don't rewrite; mark resolved so we don't loop on it forever.
                 declined.add("".join(h["raw"]))
+                merged.append(f"{filepath}:{h['start_line']}-{h['end_line']} ({strategy})")
             else:
+                merged.append(_merged_entry(filepath, lines, new_lines, strategy))
                 _write_source(path, "".join(new_lines))
                 progressed = True
                 break  # re-parse the rewritten file
@@ -580,11 +806,12 @@ def cmd_auto(args):
     if targets is None:
         return 0
     total_resolved = total_left = 0
+    merged = []
     for filepath, path in targets:
-        resolved, left = _auto_resolve_file(path, filepath, dry)
+        resolved, left = _auto_resolve_file(path, filepath, dry, merged=merged)
         total_resolved += resolved
         total_left += left
-    _auto_summary(total_resolved, total_left, dry)
+    _auto_summary(total_resolved, total_left, dry, merged)
     # Hunks left for review are the conservative outcome, not a failure.
     return 0
 
@@ -639,11 +866,12 @@ def parser():
 
     auto = commands.add_parser(
         "auto",
-        help="merge provably safe sorted-list additions",
+        help="merge provably safe hunks: sorted-list additions or non-overlapping edits",
         description=(
             "Conservatively merge two pure additions into an existing sorted run of at least "
-            "three lines. Leave every unproven hunk untouched, and never merge a generated "
-            "file such as *.lock, package-lock.json or go.sum."
+            "three lines, or two sides whose line edits touch but never overlap. Leave every "
+            "unproven hunk untouched, and never merge a generated file such as *.lock, "
+            "package-lock.json, go.sum or one whose header marks it generated."
         ),
     )
     auto.add_argument(

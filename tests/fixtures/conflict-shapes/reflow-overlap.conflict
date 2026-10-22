@@ -1,0 +1,12 @@
+match node with
+<<<<<<< conflict 1 of 1
+%%%%%%% diff from: qpvuntsm 1a2b3c4d "base" (parents of rebased revision)
+\\\\\\\        to: rlvkpnrz 5e6f7a8b "feature" (rebased revision)
+-  | .asType n | .permanent n | .marker n | .namesAgree n
++  | .asType n | .permanent n | .marker n | .agree n
+   | .firstMention n => n
++++++++ zsuskuln 9c0d1e2f "trunk" (rebase destination)
+  | .asType n | .permanent n | .becomes n | .marker n
+  | .namesAgree n | .firstMention n => n
+>>>>>>> conflict 1 of 1 ends
+  | _ => none

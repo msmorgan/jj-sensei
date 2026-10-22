@@ -1,0 +1,14 @@
+    // Reveal cards that share a type with it.
+<<<<<<< conflict 1 of 1
+%%%%%%% diff from: qpvuntsm 1a2b3c4d "base" (parents of rebased revision)
+\\\\\\\        to: rlvkpnrz 5e6f7a8b "feature" (rebased revision)
+-    // No predicate reads "shares a type";
+-    // the comparison has no constructor.
++    // The sharing half is `shares(Type, ...)`;
++    // the entry clause has no node yet.
++++++++ zsuskuln 9c0d1e2f "trunk" (rebase destination)
+    // The entry clause is an off-stack static,
+    // but no predicate reads "shares a type"
+    // until `shares` lands.
+>>>>>>> conflict 1 of 1 ends
+    body: [],

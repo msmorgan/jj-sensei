@@ -1,0 +1,13 @@
+def run():
+    lock.acquire()
+<<<<<<< conflict 1 of 1
+%%%%%%% diff from: qpvuntsm 1a2b3c4d "base" (parents of rebased revision)
+\\\\\\\        to: rlvkpnrz 5e6f7a8b "feature" (rebased revision)
+-    result = work(alpha, beta, gamma)
++    lock.release()
++    result = work(alpha, beta, gamma, timeout)
++++++++ zsuskuln 9c0d1e2f "trunk" (rebase destination)
+    result = work(alpha, beta, gamma)
+    lock.release()
+>>>>>>> conflict 1 of 1 ends
+    cleanup()

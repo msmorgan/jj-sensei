@@ -1,0 +1,20 @@
+a
+<<<<<<< conflict 1 of 1
+%%%%%%% diff from: nupmtsux 9665ab4b "base"
+\\\\\\\        to: ktyurkxn 0cb18545 "A"
+-b
++B
+ c
+ d
+%%%%%%% diff from: nupmtsux 9665ab4b "base"
+\\\\\\\        to: rvqkuxyk 724bc0b4 "B"
+ b
+-c
++C
+ d
++++++++ nqwvrxuo f6458239 "C"
+b
+c
+D
+>>>>>>> conflict 1 of 1 ends
+e

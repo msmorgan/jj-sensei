@@ -52,7 +52,11 @@ silent, ask the user rather than guess.
 
 ## Preview the automatic resolver
 
-`repair` already applies the conservative resolver. To preview or apply it
+`repair` already applies the conservative resolver. It merges additions to a
+sorted list, and line-for-line edits or deletions that touch without
+overlapping, such as one side changing a line and the other the next; a hunk
+where either side inserts lines next to the other's change is left. It lists
+every hunk it merged, with its lines; read each one. To preview or apply it
 directly:
 
 ```bash
@@ -60,8 +64,11 @@ directly:
 "<skill-dir>/scripts/conflicts" auto [FILE ...]
 ```
 
-It leaves generated files and uncertain hunks untouched. A `✓` establishes
-only that the line merge was mechanically safe; inspect the result semantically.
+It leaves uncertain hunks untouched, and recognises a generated file only by
+a lockfile or minified-file name or a generated-file header; settle any other
+generated file by the generated-file procedure before running it. A `✓`
+establishes only that the line merge was mechanically safe; inspect the result
+semantically.
 
 ## Resolve without `repair`
 

@@ -134,6 +134,50 @@ def test_repair_auto_resolves_sorted_additions_in_one_run(jj_repo):
     assert Jj(feature).commits("::@ & conflicts()") == []
 
 
+def test_repair_auto_resolves_adjacent_line_edits_in_one_run(jj_repo, capsys):
+    # jj records edits to neighbouring lines as a conflict; neither overlaps.
+    jj_repo.write(jj_repo.root, "f.txt", "head\nalpha = 1\nbeta = 1\ntail\n")
+    jj_repo.commit(jj_repo.root, "base")
+    assert run_setup(jj_repo.root) == 0
+    feature = jj_repo.add_workspace("feature")
+
+    jj_repo.write(jj_repo.root, "f.txt", "head\nalpha = 1\nbeta = 2\ntail\n")
+    jj_repo.commit(jj_repo.root, "trunk edits beta")
+    jj_repo.write(feature, "f.txt", "head\nalpha = 2\nbeta = 1\ntail\n")
+    jj_repo.commit(feature, "feature edits alpha")
+    jj_repo.run(feature, "rebase", "-s", "roots(default@..@)", "-d", "default@-")
+    assert "<<<<<<< conflict" in (feature / "f.txt").read_text()
+    capsys.readouterr()
+
+    assert run_repair(feature) == 0
+    assert (feature / "f.txt").read_text() == "head\nalpha = 2\nbeta = 2\ntail\n"
+    assert Jj(feature).commits("::@ & conflicts()") == []
+    # The finish message names the merge so it is not folded in unseen.
+    finish = capsys.readouterr().out.split("all conflicts resolved", 1)[1]
+    assert "merged automatically" in finish
+    assert "f.txt:2-3 (disjoint-merge) in change" in finish
+
+
+def test_repair_stop_lists_hunks_it_merged_before_stopping(jj_repo, capsys):
+    base = "alpha = 1\nbeta = 1\nsep\nmiddle\nsep2\ngamma = 1\n"
+    jj_repo.write(jj_repo.root, "f.txt", base)
+    jj_repo.commit(jj_repo.root, "base")
+    assert run_setup(jj_repo.root) == 0
+    feature = jj_repo.add_workspace("feature")
+
+    jj_repo.write(jj_repo.root, "f.txt", "alpha = 1\nbeta = 2\nsep\nmiddle\nsep2\ngamma = 2\n")
+    jj_repo.commit(jj_repo.root, "trunk")
+    jj_repo.write(feature, "f.txt", "alpha = 2\nbeta = 1\nsep\nmiddle\nsep2\ngamma = 3\n")
+    jj_repo.commit(feature, "feature")
+    jj_repo.run(feature, "rebase", "-s", "roots(default@..@)", "-d", "default@-")
+    capsys.readouterr()
+
+    assert run_repair(feature) == 1
+    stop = capsys.readouterr().err.split("stopped for manual conflict resolution", 1)[1]
+    assert "merged automatically" in stop
+    assert "f.txt:1-2 (disjoint-merge) in change" in stop
+
+
 def test_repair_starts_at_oldest_conflicted_change(jj_repo):
     jj_repo.write(jj_repo.root, "g.txt", "base\n")
     jj_repo.commit(jj_repo.root, "two-file base")
