@@ -15,9 +15,14 @@ source. Resolve helper paths from this loaded `SKILL.md`.
 ## 1. Diagnose
 
 Before any fix, state one plain sentence naming the stale, divergent,
-conflicted, or lost revision and what produced the state. Diagnosis is complete
-when both the affected revision and the mechanism are known; otherwise gather
-read-only evidence or load `knowledge` before choosing a repair.
+conflicted, or lost revision, the workspace that owns it, and what produced the
+state. Diagnosis is complete when the affected revision, its owner, and the
+mechanism are known; otherwise gather read-only evidence or load `knowledge`
+before choosing a repair.
+
+Repair only from the workspace that owns the affected change. When another
+workspace's problem blocks you, report it to that workspace's owner and wait;
+don't repair it yourself.
 
 ## 2. Route
 
@@ -63,10 +68,6 @@ two pure additions to stack, generated files, the automatic resolver run
 directly, or a conflicted change outside `::@`.
 
 ## 4. Run the repair helper
-
-Run `repair` only from the workspace that owns the affected change. When
-another workspace's problem blocks you, report it to that workspace's owner
-and wait; don't repair it yourself.
 
 For a stale workspace or working-copy divergence, run `repair` after its
 reference; it realigns and converges before its conflict walk. Run it bare so
