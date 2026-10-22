@@ -135,7 +135,11 @@ class Jj:
             _WORKSPACE_TEMPLATE,
             ignore_working_copy=True,
         )
-        return [parse_workspace(line) for line in result.stdout.splitlines() if line.strip()]
+        return [
+            _flag_missing_root(parse_workspace(line))
+            for line in result.stdout.splitlines()
+            if line.strip()
+        ]
 
     def current_workspace(self) -> Workspace:
         root = self.workspace_root()
@@ -255,6 +259,25 @@ def parse_workspace(line: str) -> Workspace:
         name=item["name"],
         commit_id=item["commit_id"],
         root=Path(item["root"]).resolve(),
+    )
+
+
+def _flag_missing_root(workspace: Workspace) -> Workspace:
+    """Mark a workspace orphaned when jj reports a root that is not on disk.
+
+    Since 0.46 `workspace list` renders the recorded root path even when the
+    directory is gone (jj only warns on stderr), so the earlier signals, an
+    `<Error: ...>` placeholder or an empty string, no longer appear. Check the
+    filesystem too. Older jj versions are unaffected: they already yield
+    `root=None`, which passes through unchanged.
+    """
+    if workspace.root is None or workspace.root.is_dir():
+        return workspace
+    return Workspace(
+        name=workspace.name,
+        commit_id=workspace.commit_id,
+        root=None,
+        root_error=f"workspace directory {workspace.root} does not exist",
     )
 
 
