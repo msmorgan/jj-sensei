@@ -11,12 +11,17 @@ jj-sensei conflict helper for jj repos using the default diff+snapshot marker fo
 
   scripts/conflicts show --json [FILE ...]
       Same but as a JSON array — each element has: file, hunk, total,
-      start_line, end_line, diff_header, diff_side, diff_base,
-      snap_header, snapshot.
+      start_line, end_line, fingerprint, sides, diff_header, diff_side,
+      diff_base, snap_header, snapshot.
 
-  scripts/conflicts accept FILE snapshot|diff|base|stack|stack-snap-first|sort
-      Resolve every supported hunk in FILE by choosing a side, composing pure
-      additions, or conservatively merging additions to a sorted list.
+  scripts/conflicts accept FILE SIDE [--hunk N --expect FINGERPRINT]
+      Resolve every supported hunk in FILE, or only hunk N, by choosing a side
+      (snapshot|diff|base, a role such as `destination`/`rebased`, or a change
+      ID from the hunk's labels), composing pure additions (stack,
+      stack-snap-first), or conservatively merging a sorted list (sort).
+
+  scripts/conflicts replace FILE N --expect FINGERPRINT [--from PATH]
+      Replace hunk N, markers included, with content from PATH or stdin.
 
   scripts/conflicts auto [--dry-run] [FILE ...]
       Resolve only hunks whose line merge is provably safe: two additions to a
@@ -24,6 +29,7 @@ jj-sensei conflict helper for jj repos using the default diff+snapshot marker fo
 """
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -37,6 +43,16 @@ from .jj import Jj, JjError
 _START = re.compile(r"^(<{7,}) conflict (\d+) of (\d+)$")
 _GENERIC_START = re.compile(r"^<{7,}", re.MULTILINE)
 _LINE = re.compile(r"[^\r\n]*(?:\r\n|\r|\n)|[^\r\n]+")
+# A side label as jj writes it after the marker run, e.g.
+#   diff from: prxwxlkq 7abd6bba "base" (parents of rebased revision)
+#          to: wxtpllkt a2dfdd18 "one" (rebase destination)
+#   psxzqytx a3c804b9 "two" (rebased revision) (no terminating newline)
+_LABEL = re.compile(
+    r'^\s*(?:diff from:|to:)?\s*(?P<change>[a-z]+) (?P<commit>[0-9a-f]+) "(?P<desc>.*)"'
+    r"(?P<tail>(?: \([^()]*\))*)\s*$"
+)
+_NO_NEWLINE = "no terminating newline"
+_MARKER_LINE = re.compile(r"^(?:<{7,}|>{7,}) conflict \d+ of \d+", re.MULTILINE)
 
 
 def workspace_root(start=None):
@@ -113,6 +129,7 @@ def parse_file(path):
             while j < len(lines) and not lines[j].startswith(end_pfx + " conflict"):
                 j += 1
             sides = _parse_sides(lines[i + 1 : j], n)
+            inner = "".join(lines[i + 1 : j])
             root = workspace_root(path.parent)
             try:
                 file_str = str(path.resolve().relative_to(root)) if root else str(path)
@@ -125,6 +142,10 @@ def parse_file(path):
                     "total": int(m.group(3)),
                     "start_line": i + 1,  # 1-indexed
                     "end_line": j + 1,  # 1-indexed
+                    # Hash only what lies between the markers, so a hunk keeps
+                    # its fingerprint while other hunks are resolved around it.
+                    "fingerprint": hashlib.sha256(inner.encode("utf-8")).hexdigest()[:8],
+                    "_terminated": j < len(lines),
                     "_start": i,  # 0-indexed for splicing
                     "_end": j,
                     "raw": lines[i : j + 1],
@@ -171,12 +192,18 @@ def _parse_sides(inner, n):
         "diff_base": [],
         "snap_header": None,
         "snapshot": [],
+        "sides": [],
     }
     has_removal = False
 
     for kind, sec in sections:
         if kind == "diff":
             result["diff_header"] = sec[0]
+            labels = [sec[0][n:]] + [line[n:] for line in sec[1:] if line.startswith(cont_m)]
+            from_label = labels[0].strip().removeprefix("diff from:")
+            to_label = next((label for label in labels[1:] if "to:" in label), "")
+            result["sides"].append(_side_label("base", from_label))
+            result["sides"].append(_side_label("diff", to_label.strip().removeprefix("to:")))
             for line in sec[1:]:
                 # Rebuild each side with the terminator the file actually used,
                 # so a CRLF work tree survives the round-trip.
@@ -192,6 +219,7 @@ def _parse_sides(inner, n):
         elif kind == "snapshot":
             result["snap_header"] = sec[0]
             result["snapshot"] = list(sec[1:])
+            result["sides"].append(_side_label("snapshot", sec[0][n:]))
 
     diff_sections = sum(1 for kind, _ in sections if kind == "diff")
     snapshot_sections = sum(1 for kind, _ in sections if kind == "snapshot")
@@ -222,7 +250,35 @@ def _parse_sides(inner, n):
         and any(snapshot_insertions)
     )
     result["has_removal"] = has_removal
+    # jj gives every term a final newline when any lacks one, annotates the
+    # label of each term that lacked it, and drops the closing marker's own.
+    result["no_newline"] = any(side["no_newline"] for side in result["sides"])
     return result
+
+
+def _side_label(name, text):
+    """Describe one side from the label jj wrote after its marker."""
+    text = text.strip()
+    side = {
+        "name": name,
+        "change_id": None,
+        "commit_id": None,
+        "description": None,
+        "role": None,
+        "label": text,
+        "no_newline": f"({_NO_NEWLINE})" in text,
+    }
+    match = _LABEL.match(text)
+    if match:
+        notes = re.findall(r"\(([^()]*)\)", match.group("tail"))
+        roles = [note for note in notes if note != _NO_NEWLINE]
+        side.update(
+            change_id=match.group("change"),
+            commit_id=match.group("commit"),
+            description=match.group("desc"),
+            role=" ".join(roles) or None,
+        )
+    return side
 
 
 def _multiset_diff(super_lines, sub_lines):
@@ -606,12 +662,11 @@ def cmd_show(args):
     for h in all_hunks:
         print("─" * 64)
         print(
-            f"File: {h['file']}  |  hunk {h['hunk']}/{h['total']}  |  lines {h['start_line']}–{h['end_line']}"
+            f"File: {h['file']}  |  hunk {h['hunk']}/{h['total']}  |  "
+            f"lines {h['start_line']}–{h['end_line']}  |  fingerprint {h['fingerprint']}"
         )
-        if h["diff_header"]:
-            print(f"  diff-side : {h['diff_header']}")
-        if h["snap_header"]:
-            print(f"  snapshot  : {h['snap_header']}")
+        for side in h["sides"]:
+            print(f"  {side['name']:<8} : {side['label'] or '(unlabelled)'}")
         print()
         sys.stdout.writelines(h["raw"])
         print()
@@ -623,29 +678,95 @@ def cmd_show(args):
     return 1 if unsupported else 0
 
 
+_SIDE_KEYS = {"snapshot": "snapshot", "diff": "diff_side", "base": "diff_base"}
+# Shorthands for the roles jj appends to rebase labels.
+_ROLE_ALIASES = {"destination": "rebase destination", "rebased": "rebased revision"}
+
+
+def _side_by_name(hunk, name):
+    """The side of `hunk` that `name` selects: a section name (snapshot, diff,
+    base), a role from its label, or a change or commit ID prefix.
+
+    Raises ValueError, naming the hunk's sides, when none or several match.
+    """
+    for side in hunk["sides"]:
+        if side["name"] == name:
+            return side
+    role = _ROLE_ALIASES.get(name, name)
+    matches = [
+        side
+        for side in hunk["sides"]
+        if side["role"] == role
+        or (side["change_id"] or "").startswith(name)
+        or (side["commit_id"] or "").startswith(name)
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    problem = "matches more than one side" if matches else "names no side"
+    sides = "; ".join(
+        f"{side['name']} = {side['label'] or '(unlabelled)'}" for side in hunk["sides"]
+    )
+    raise ValueError(f"'{name}' {problem} of hunk {hunk['hunk']}/{hunk['total']} ({sides})")
+
+
+def _take_side(hunk, side):
+    """The lines a hunk resolves to when one side is taken whole."""
+    lines = list(hunk[_SIDE_KEYS[side["name"]]])
+    if hunk["no_newline"] and lines:
+        # Undo the newline jj added to every term to keep markers on their own
+        # line; the side's own text decides whether the file ends with one.
+        last = lines[-1]
+        lines[-1] = last[:-1] if last.endswith("\n") else last
+        if not lines[-1]:
+            lines.pop()
+    return lines
+
+
+def _describe_side(side):
+    return side["name"] + (f" = {side['label']}" if side["label"] else "")
+
+
+def _resolution(hunk, strategy):
+    """Return (lines, description) for one supported hunk, or raise ValueError."""
+    if strategy in ("stack", "stack-snap-first"):
+        if not hunk["stackable"]:
+            raise ValueError("not two pure additions — resolve by hand")
+        return _stack_resolution(hunk, snapshot_first=strategy == "stack-snap-first"), strategy
+    side = _side_by_name(hunk, strategy)
+    return _take_side(hunk, side), _describe_side(side)
+
+
+def _unsupported_reason(hunk):
+    if not hunk["_terminated"]:
+        return "no closing marker"
+    if not hunk["supported"]:
+        return "many-sided conflict" if hunk["many_sided"] else "unsupported marker style"
+    return None
+
+
 def cmd_accept(args):
-    if len(args) < 2:
-        print(
-            "Usage: scripts/conflicts accept FILE snapshot|diff|base|stack|stack-snap-first|sort",
-            file=sys.stderr,
-        )
-        return 1
-    filepath, side = args[0], args[1]
-    valid = ("snapshot", "diff", "base", "stack", "stack-snap-first", "sort")
-    if side not in valid:
-        print(f"Unknown side '{side}'. Choose: {', '.join(valid)}", file=sys.stderr)
+    filepath, strategy = args.file, args.strategy
+    single = args.hunk is not None
+    if single != (args.expect is not None):
+        print("accept: --hunk and --expect go together.", file=sys.stderr)
         return 1
     path = _resolve_path(filepath)
     if path is None:
         print(f"Not found: {filepath}", file=sys.stderr)
         return 1
-    if side == "sort":
+    if strategy == "sort":
+        if single:
+            print("accept: sort applies to the whole file; drop --hunk.", file=sys.stderr)
+            return 1
         merged = []
         resolved, left = _auto_resolve_file(
             path, filepath, dry=False, disjoint=False, merged=merged
         )
         _auto_summary(resolved, left, dry=False, merged=merged)
         return 0
+    if single:
+        return _accept_one(path, filepath, strategy, args.hunk, args.expect)
+
     hunks, lines = parse_file(path)
     if not hunks:
         if _has_unparsed_conflict(path, hunks):
@@ -657,41 +778,162 @@ def cmd_accept(args):
         print(f"No conflicts in {filepath}")
         return 0
 
-    key_map = {"snapshot": "snapshot", "diff": "diff_side", "base": "diff_base"}
-    resolved = skipped = 0
-    for h in reversed(hunks):
-        # Parsed sides are safe to apply only for a two-sided default-style hunk.
-        if not h["supported"]:
-            reason = "many-sided conflict" if h["many_sided"] else "unsupported marker style"
+    # Choose for every hunk before writing any: a side named by role or change
+    # ID may be the snapshot in one hunk and the diff in the next, and a name
+    # that one hunk lacks must not leave the file half-resolved.
+    plans, skipped, refused = [], 0, []
+    for h in hunks:
+        reason = _unsupported_reason(h)
+        if reason:
             print(f"  {filepath} hunk {h['hunk']}/{h['total']}: left ({reason} — resolve by hand)")
             skipped += 1
             continue
-        if side in key_map:
-            resolution = h[key_map[side]]
-        elif side == "stack":
-            if not h["stackable"]:
-                print(
-                    f"  {filepath} hunk {h['hunk']}/{h['total']}: left (not two pure additions — resolve by hand)"
-                )
+        try:
+            plans.append((h, *_resolution(h, strategy)))
+        except ValueError as error:
+            if strategy in ("stack", "stack-snap-first"):
+                print(f"  {filepath} hunk {h['hunk']}/{h['total']}: left ({error})")
                 skipped += 1
-                continue
-            resolution = _stack_resolution(h)
-        else:  # stack-snap-first
-            if not h["stackable"]:
-                print(
-                    f"  {filepath} hunk {h['hunk']}/{h['total']}: left (not two pure additions — resolve by hand)"
-                )
-                skipped += 1
-                continue
-            resolution = _stack_resolution(h, snapshot_first=True)
-        lines[h["_start"] : h["_end"] + 1] = resolution
-        resolved += 1
+            else:
+                refused.append(str(error))
+    if refused:
+        for message in refused:
+            print(f"accept: {message}", file=sys.stderr)
+        print(f"Nothing written to {filepath}.", file=sys.stderr)
+        return 1
 
-    if resolved:
+    for h, resolution, _ in reversed(plans):
+        lines[h["_start"] : h["_end"] + 1] = resolution
+    if plans:
         _write_source(path, "".join(lines))
     left = f", {skipped} unsupported hunk(s) left" if skipped else ""
-    print(f"Resolved {resolved} hunk(s) in {filepath} (accepted {side} side){left}.")
+    print(f"Resolved {len(plans)} hunk(s) in {filepath} (accepted {strategy} side){left}.")
+    if strategy not in _SIDE_KEYS and strategy not in ("stack", "stack-snap-first"):
+        for h, _, taken in plans:
+            print(f"  hunk {h['hunk']}/{h['total']}: {taken}")
     return 1 if skipped else 0
+
+
+def _find_hunk(path, filepath, number, expect):
+    """Return (hunk, lines) for hunk `number` if it still has fingerprint
+    `expect`; otherwise print why and return (None, None)."""
+    hunks, lines = parse_file(path)
+    if not hunks and _has_unparsed_conflict(path, hunks):
+        print(
+            f"Unsupported conflict marker style in {filepath}; resolve it by hand.",
+            file=sys.stderr,
+        )
+        return None, None
+    found = [h for h in hunks if h["hunk"] == number]
+    if not found:
+        remaining = ", ".join(str(h["hunk"]) for h in hunks) or "none"
+        print(
+            f"{filepath} has no conflict {number} (conflicts remaining: {remaining}).",
+            file=sys.stderr,
+        )
+        return None, None
+    if len(found) > 1:
+        print(
+            f"{filepath} has {len(found)} conflicts numbered {number}; resolve by hand.",
+            file=sys.stderr,
+        )
+        return None, None
+    hunk = found[0]
+    if hunk["fingerprint"] != expect.lower():
+        print(
+            f"{filepath} conflict {number} no longer matches fingerprint {expect} "
+            f"(it is now {hunk['fingerprint']}). Rerun `conflicts show {filepath}` "
+            "and choose again from what it prints.",
+            file=sys.stderr,
+        )
+        return None, None
+    if not hunk["_terminated"]:
+        print(
+            f"{filepath} conflict {number} has no closing marker; resolve it by hand.",
+            file=sys.stderr,
+        )
+        return None, None
+    return hunk, lines
+
+
+def _splice(path, filepath, hunk, lines, resolution, how):
+    lines[hunk["_start"] : hunk["_end"] + 1] = resolution
+    _write_source(path, "".join(lines))
+    remaining, _ = parse_file(path)
+    if remaining:
+        numbers = ", ".join(str(h["hunk"]) for h in remaining)
+        after = f"conflicts still open: {numbers}"
+    elif _GENERIC_START.search("".join(lines)):
+        after = "other conflict markers remain; inspect the file"
+    else:
+        after = "no conflict markers remain"
+    print(f"Resolved conflict {hunk['hunk']}/{hunk['total']} in {filepath} ({how}); {after}.")
+
+
+def _accept_one(path, filepath, strategy, number, expect):
+    hunk, lines = _find_hunk(path, filepath, number, expect)
+    if hunk is None:
+        return 1
+    reason = _unsupported_reason(hunk)
+    if reason:
+        print(
+            f"accept: {filepath} conflict {number}: {reason}; use `replace` instead.",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        resolution, how = _resolution(hunk, strategy)
+    except ValueError as error:
+        print(f"accept: {error}", file=sys.stderr)
+        return 1
+    _splice(path, filepath, hunk, lines, resolution, f"took {how}")
+    return 0
+
+
+def _hunk_line_ending(hunk):
+    """CRLF when every content line of the hunk ends with it, else LF."""
+    content = hunk["snapshot"] + hunk["diff_base"] + hunk["diff_side"]
+    ended = [line for line in content if line.endswith(("\n", "\r"))]
+    if ended and all(line.endswith("\r\n") for line in ended):
+        return "\r\n"
+    return "\n"
+
+
+def cmd_replace(args):
+    filepath = args.file
+    if args.source in (None, "-"):
+        if sys.stdin is None or sys.stdin.isatty():
+            print("replace: pipe the replacement on stdin or pass --from PATH.", file=sys.stderr)
+            return 1
+        content = sys.stdin.buffer.read().decode("utf-8")
+    else:
+        content = _read_source(Path(args.source))
+    if not content and not args.allow_empty:
+        print(
+            "replace: the replacement is empty; pass --allow-empty to delete the hunk's lines.",
+            file=sys.stderr,
+        )
+        return 1
+    if _MARKER_LINE.search(content):
+        print("replace: the replacement still contains conflict markers.", file=sys.stderr)
+        return 1
+    path = _resolve_path(filepath)
+    if path is None:
+        print(f"Not found: {filepath}", file=sys.stderr)
+        return 1
+    hunk, lines = _find_hunk(path, filepath, args.hunk, args.expect)
+    if hunk is None:
+        return 1
+    ending = _hunk_line_ending(hunk)
+    if ending == "\r\n" and "\r" not in content:
+        content = content.replace("\n", "\r\n")
+    # Without a final newline the next line would join the last replaced one.
+    # jj's missing-newline case is the exception: there the hunk ends the file
+    # and the replacement says whether the file ends with a newline.
+    if content and not content.endswith(("\n", "\r")) and not hunk["no_newline"]:
+        content += ending
+    _splice(path, filepath, hunk, lines, _split_lines(content), "replaced")
+    return 0
 
 
 def _auto_summary(resolved, left, dry, merged=()):
@@ -850,18 +1092,51 @@ def parser():
         "accept",
         help="apply one understood resolution strategy",
         description=(
-            "Resolve every supported hunk in one file using an explicitly selected strategy. "
-            "Unsupported hunks are left untouched."
+            "Resolve every supported hunk in one file, or one hunk with --hunk, using an "
+            "explicitly selected strategy. Unsupported hunks are left untouched."
         ),
     )
     accept.add_argument("file", metavar="FILE", help="conflicted file to resolve")
     accept.add_argument(
         "strategy",
-        choices=("snapshot", "diff", "base", "stack", "stack-snap-first", "sort"),
+        metavar="SIDE",
         help=(
-            "snapshot/diff/base selects one side; stack variants combine two pure additions; "
-            "sort conservatively merges additions to a sorted list"
+            "snapshot, diff or base selects that section; a role from the labels "
+            "(destination, rebased, or its full text) or a change/commit ID prefix selects "
+            "that side in every hunk, whichever section it is; stack or stack-snap-first "
+            "combines two pure additions; sort conservatively merges a sorted list"
         ),
+    )
+    accept.add_argument(
+        "--hunk", type=int, metavar="N", help="resolve only conflict N as `show` numbers it"
+    )
+    accept.add_argument(
+        "--expect",
+        metavar="FINGERPRINT",
+        help="the hunk's fingerprint from `show`; required with --hunk",
+    )
+
+    replace = commands.add_parser(
+        "replace",
+        help="replace one hunk with given content",
+        description=(
+            "Replace conflict N, markers included, with content read from --from PATH or "
+            "stdin, if the hunk still has the fingerprint `show` printed."
+        ),
+    )
+    replace.add_argument("file", metavar="FILE", help="conflicted file")
+    replace.add_argument("hunk", type=int, metavar="N", help="conflict number as `show` prints it")
+    replace.add_argument(
+        "--expect", required=True, metavar="FINGERPRINT", help="the hunk's fingerprint from `show`"
+    )
+    replace.add_argument(
+        "--from",
+        dest="source",
+        metavar="PATH",
+        help="read the replacement from PATH (default: stdin)",
+    )
+    replace.add_argument(
+        "--allow-empty", action="store_true", help="accept an empty replacement (delete the lines)"
     )
 
     auto = commands.add_parser(
@@ -898,7 +1173,9 @@ def main(argv=None):
         if args.command == "show":
             return cmd_show((["--json"] if args.json else []) + args.files)
         if args.command == "accept":
-            return cmd_accept([args.file, args.strategy])
+            return cmd_accept(args)
+        if args.command == "replace":
+            return cmd_replace(args)
         if args.command == "auto":
             return cmd_auto((["--dry-run"] if args.dry_run else []) + args.files)
     except JjError as error:

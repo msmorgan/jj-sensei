@@ -16,6 +16,40 @@ The helper supports jj's default diff+snapshot marker style:
 [Read jj conflict markers](markers.md) owns section grammar, long markers,
 missing newlines, N-way conflicts, and alternative styles.
 
+## Resolve one hunk
+
+`show` prints each hunk's number, its `fingerprint`, and each side's label:
+change ID, commit ID, description, and jj's role, such as `rebase destination`
+or `rebased revision`. `snapshot` and `diff` name marker sections, not sides
+of the history: one rebase can put the rebased revision in the snapshot of one
+hunk and in the diff of the next. Name a side by role (`destination`,
+`rebased`, or the full role text) or by a change ID prefix, and the helper
+finds its section in each hunk.
+
+```bash
+"<skill-dir>/scripts/conflicts" accept FILE SIDE --hunk N --expect FINGERPRINT
+"<skill-dir>/scripts/conflicts" replace FILE N --expect FINGERPRINT --from PATH
+"<skill-dir>/scripts/conflicts" replace FILE N --expect FINGERPRINT <<'END'
+the resolved lines
+END
+```
+
+- `accept --hunk` resolves hunk N alone with any `accept` strategy except
+  `sort`: a section, a role, a change ID, or `stack`/`stack-snap-first`.
+  Without `--hunk`, a role or change ID applies to every hunk in the file,
+  and nothing is written unless every hunk has that side.
+- `replace` swaps the whole marker block for the content from `--from` or
+  stdin. Content without a final newline gains one, except in a hunk jj
+  labelled `(no terminating newline)`, where the content decides how the file
+  ends. LF content entering a CRLF hunk becomes CRLF. Empty content needs
+  `--allow-empty`. `replace` also settles many-sided hunks, which `accept`
+  leaves.
+- `--expect` is the guard: a hunk whose text changed since `show` is refused;
+  rerun `show` and choose again. A hunk keeps its number and fingerprint while
+  others are resolved, and each run lists the conflicts still open.
+
+`repair` prints each listed hunk's fingerprint too.
+
 ## Deletion conflicts
 
 A conflict “including 1 deletion” resolves as a deletion only when the path is

@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -954,3 +955,338 @@ def test_conflict_files_parses_every_row(monkeypatch):
     listing = "a b.txt    2-sided conflict\ndel.txt    2-sided conflict including 1 deletion\n"
     _stub_jj(monkeypatch, 0, listing, "")
     assert jj.Jj().conflict_files() == ["a b.txt", "del.txt"]
+
+
+# --- per-hunk accept and replace --------------------------------------------
+
+# Verbatim from `jj rebase -r two -d one` where both edited lines b and f, and
+# `one` dropped the final newline. The rebased revision is the snapshot in
+# conflict 1 and the diff in conflict 2, so "snapshot" names different commits.
+REBASED = """\
+a
+<<<<<<< conflict 1 of 2
+%%%%%%% diff from: prxwxlkq 7abd6bba "base" (parents of rebased revision)
+\\\\\\\\\\\\\\        to: wxtpllkt a2dfdd18 "one" (rebase destination)
+-b
++B1
++++++++ psxzqytx a3c804b9 "two" (rebased revision)
+B2
+>>>>>>> conflict 1 of 2 ends
+c
+d
+e
+<<<<<<< conflict 2 of 2
++++++++ wxtpllkt a2dfdd18 "one" (rebase destination) (no terminating newline)
+F1
+g
+%%%%%%% diff from: prxwxlkq 7abd6bba "base" (parents of rebased revision)
+\\\\\\\\\\\\\\        to: psxzqytx a3c804b9 "two" (rebased revision)
+-f
++F2
+ g
+ 
+>>>>>>> conflict 2 of 2 ends"""
+
+
+def _show_json(path):
+    r = _run("show", "--json", str(path))
+    assert r.returncode == 0, r.stderr
+    return {h["hunk"]: h for h in json.loads(r.stdout)}
+
+
+def _fingerprint(path, number):
+    return _show_json(path)[number]["fingerprint"]
+
+
+def _rebased(tmp_path, text=REBASED):
+    return _write_raw(tmp_path / "f.txt", text)
+
+
+def test_show_json_labels_each_side_with_its_role(tmp_path):
+    hunks = _show_json(_rebased(tmp_path))
+    roles = {h: {s["name"]: s["role"] for s in hunks[h]["sides"]} for h in hunks}
+    assert roles[1] == {
+        "base": "parents of rebased revision",
+        "diff": "rebase destination",
+        "snapshot": "rebased revision",
+    }
+    assert roles[2]["snapshot"] == "rebase destination"
+    assert roles[2]["diff"] == "rebased revision"
+    snapshot = next(s for s in hunks[2]["sides"] if s["name"] == "snapshot")
+    assert snapshot["change_id"] == "wxtpllkt"
+    assert snapshot["description"] == "one"
+    assert snapshot["no_newline"] is True
+    assert all(len(h["fingerprint"]) == 8 for h in hunks.values())
+
+
+def test_show_prints_fingerprint_and_side_labels(tmp_path):
+    f = _rebased(tmp_path)
+    r = _run("show", str(f))
+    assert f"fingerprint {_fingerprint(f, 1)}" in r.stdout
+    assert 'snapshot : psxzqytx a3c804b9 "two" (rebased revision)' in r.stdout
+
+
+def test_accept_one_hunk_by_role_leaves_the_other(tmp_path):
+    f = _rebased(tmp_path)
+    second = _fingerprint(f, 2)
+    r = _run("accept", str(f), "rebased", "--hunk", "1", "--expect", _fingerprint(f, 1))
+    assert r.returncode == 0, r.stderr
+    assert "conflicts still open: 2" in r.stdout
+    text = _read_raw(f)
+    assert text.startswith("a\nB2\nc\n")
+    assert text.endswith(REBASED[REBASED.index("<<<<<<< conflict 2") :])
+    # Resolving one hunk does not invalidate another's fingerprint.
+    assert _fingerprint(f, 2) == second
+
+
+def test_accept_by_role_takes_the_same_commit_in_every_hunk(tmp_path):
+    f = _rebased(tmp_path)
+    r = _run("accept", str(f), "rebased")
+    assert r.returncode == 0, r.stderr
+    assert _read_raw(f) == "a\nB2\nc\nd\ne\nF2\ng\n"
+    assert "hunk 1/2: snapshot" in r.stdout
+    assert "hunk 2/2: diff" in r.stdout
+
+
+def test_accept_by_change_id_prefix(tmp_path):
+    f = _rebased(tmp_path)
+    r = _run("accept", str(f), "wxtp")
+    assert r.returncode == 0, r.stderr
+    # `one` has no final newline; the newline jj added for the marker goes.
+    assert _read_raw(f) == "a\nB1\nc\nd\ne\nF1\ng"
+
+
+def test_accept_snapshot_drops_the_newline_jj_added(tmp_path):
+    f = _rebased(tmp_path)
+    r = _run("accept", str(f), "destination", "--hunk", "2", "--expect", _fingerprint(f, 2))
+    assert r.returncode == 0, r.stderr
+    assert _read_raw(f).endswith("e\nF1\ng")
+
+
+def test_accept_refuses_a_name_some_hunk_lacks_and_writes_nothing(tmp_path):
+    f = _rebased(tmp_path)
+    r = _run("accept", str(f), "rebase")
+    assert r.returncode == 1
+    assert "names no side of hunk 1/2" in r.stderr
+    assert '"one" (rebase destination)' in r.stderr
+    assert _read_raw(f) == REBASED
+
+
+def test_accept_hunk_refuses_a_stale_fingerprint(tmp_path):
+    f = _rebased(tmp_path)
+    r = _run("accept", str(f), "diff", "--hunk", "2", "--expect", _fingerprint(f, 1))
+    assert r.returncode == 1
+    assert "no longer matches fingerprint" in r.stderr
+    assert _read_raw(f) == REBASED
+
+
+def test_accept_hunk_refuses_a_resolved_number(tmp_path):
+    f = _rebased(tmp_path)
+    first = _fingerprint(f, 1)
+    assert _run("accept", str(f), "diff", "--hunk", "1", "--expect", first).returncode == 0
+    r = _run("accept", str(f), "diff", "--hunk", "1", "--expect", first)
+    assert r.returncode == 1
+    assert "has no conflict 1 (conflicts remaining: 2)" in r.stderr
+
+
+def test_accept_hunk_requires_expect(tmp_path):
+    f = _rebased(tmp_path)
+    r = _run("accept", str(f), "diff", "--hunk", "1")
+    assert r.returncode == 1
+    assert "--hunk and --expect go together" in r.stderr
+    assert _read_raw(f) == REBASED
+
+
+def test_accept_hunk_can_stack_two_additions(tmp_path):
+    f = tmp_path / "doc.md"
+    f.write_text((SHAPES / "same-point-additions.conflict").read_text())
+    r = _run("accept", str(f), "stack-snap-first", "--hunk", "1", "--expect", _fingerprint(f, 1))
+    assert r.returncode == 0, r.stderr
+    text = f.read_text()
+    assert text.index("Trunk ruling") < text.index("Feature ruling")
+    assert "<<<<<<<" not in text
+
+
+def test_accept_hunk_preserves_long_markers_elsewhere(tmp_path):
+    long_hunk = """\
+<<<<<<<<<<<<<<< conflict 1 of 2
+%%%%%%%%%%%%%%%
+-Heading
++HEADING
+ =======
++++++++++++++++
+New Heading
+===========
+>>>>>>>>>>>>>>> conflict 1 of 2 ends
+"""
+    other = QUALIFYING.replace("<<<<<<< conflict 1 of 1", "<<<<<<<<<<<<<<< conflict 2 of 2")
+    other = other.replace(">>>>>>> conflict 1 of 1", ">>>>>>>>>>>>>>> conflict 2 of 2")
+    other = other.replace("%%%%%%%", "%" * 15).replace("+++++++", "+" * 15)
+    f = _write_raw(tmp_path / "f.txt", long_hunk + other)
+    r = _run("accept", str(f), "diff", "--hunk", "1", "--expect", _fingerprint(f, 1))
+    assert r.returncode == 0, r.stderr
+    assert _read_raw(f) == "HEADING\n=======\n" + other
+
+
+def test_accept_hunk_preserves_crlf(tmp_path):
+    f = _write_raw(tmp_path / "f.txt", QUALIFYING.replace("\n", "\r\n"))
+    r = _run("accept", str(f), "snapshot", "--hunk", "1", "--expect", _fingerprint(f, 1))
+    assert r.returncode == 0, r.stderr
+    assert f.read_bytes() == (
+        b"import aaa\r\nimport bbb\r\nimport ccc\r\nimport ddd\r\nimport eee\r\n"
+    )
+
+
+def test_accept_hunk_declines_a_many_sided_conflict(tmp_path):
+    f = tmp_path / "f.txt"
+    f.write_text((SHAPES / "three-sided.conflict").read_text())
+    r = _run("accept", str(f), "snapshot", "--hunk", "1", "--expect", _fingerprint(f, 1))
+    assert r.returncode == 1
+    assert "many-sided conflict; use `replace` instead" in r.stderr
+
+
+def _replace(path, number, expect, content, *extra):
+    return subprocess.run(
+        [sys.executable, str(CONFLICTS), "replace", str(path), str(number), "--expect", expect]
+        + list(extra),
+        input=content.encode(),
+        capture_output=True,
+    )
+
+
+def test_replace_from_stdin_resolves_one_hunk(tmp_path):
+    f = _rebased(tmp_path)
+    r = _replace(f, 1, _fingerprint(f, 1), "B1 and B2\n")
+    assert r.returncode == 0, r.stderr
+    assert (
+        _read_raw(f) == "a\nB1 and B2\nc\nd\ne\n" + REBASED[REBASED.index("<<<<<<< conflict 2") :]
+    )
+
+
+def test_replacing_the_last_hunk_leaves_no_markers(tmp_path):
+    f = _rebased(tmp_path)
+    source = tmp_path / "resolution.txt"
+    source.write_text("F1 and F2\ng\n")
+    for number, how in ((2, ["--from", str(source)]), (1, ["--from", str(source)])):
+        r = _run("replace", str(f), str(number), "--expect", _fingerprint(f, number), *how)
+        assert r.returncode == 0, r.stderr
+    assert "no conflict markers remain" in r.stdout
+    assert _read_raw(f) == "a\nF1 and F2\ng\nc\nd\ne\nF1 and F2\ng\n"
+
+
+def test_replace_writes_the_last_hunk_verbatim_when_jj_marked_no_newline(tmp_path):
+    f = _rebased(tmp_path)
+    r = _replace(f, 2, _fingerprint(f, 2), "F1 and F2\ng")
+    assert r.returncode == 0, r.stderr
+    assert _read_raw(f).endswith("e\nF1 and F2\ng")
+
+
+def test_replace_adds_a_missing_final_newline_mid_file(tmp_path):
+    f = _write_raw(tmp_path / "f.txt", QUALIFYING)
+    r = _replace(f, 1, _fingerprint(f, 1), "merged")
+    assert r.returncode == 0, r.stderr
+    assert _read_raw(f) == "import aaa\nmerged\nimport eee\n"
+
+
+def test_replace_matches_a_crlf_file(tmp_path):
+    f = _write_raw(tmp_path / "f.txt", QUALIFYING.replace("\n", "\r\n"))
+    r = _replace(f, 1, _fingerprint(f, 1), "one\ntwo\n")
+    assert r.returncode == 0, r.stderr
+    assert f.read_bytes() == b"import aaa\r\none\r\ntwo\r\nimport eee\r\n"
+
+
+def test_replace_refuses_a_stale_fingerprint(tmp_path):
+    f = _rebased(tmp_path)
+    r = _replace(f, 2, "00000000", "x\n")
+    assert r.returncode == 1
+    assert "no longer matches fingerprint 00000000" in r.stderr.decode()
+    assert _read_raw(f) == REBASED
+
+
+def test_replace_refuses_empty_content_unless_allowed(tmp_path):
+    f = _write_raw(tmp_path / "f.txt", QUALIFYING)
+    expect = _fingerprint(f, 1)
+    r = _replace(f, 1, expect, "")
+    assert r.returncode == 1
+    assert "--allow-empty" in r.stderr.decode()
+    assert _read_raw(f) == QUALIFYING
+    assert _replace(f, 1, expect, "", "--allow-empty").returncode == 0
+    assert _read_raw(f) == "import aaa\nimport eee\n"
+
+
+def test_replace_refuses_content_with_markers(tmp_path):
+    f = _write_raw(tmp_path / "f.txt", QUALIFYING)
+    r = _replace(f, 1, _fingerprint(f, 1), QUALIFYING)
+    assert r.returncode == 1
+    assert "still contains conflict markers" in r.stderr.decode()
+    assert _read_raw(f) == QUALIFYING
+
+
+def test_replace_resolves_a_many_sided_conflict(tmp_path):
+    f = tmp_path / "f.txt"
+    f.write_text((SHAPES / "three-sided.conflict").read_text())
+    r = _replace(f, 1, _fingerprint(f, 1), "B\nC\nD\n")
+    assert r.returncode == 0, r.stderr
+    assert f.read_text() == "a\nB\nC\nD\ne\n"
+
+
+def _read_raw(path):
+    with path.open(encoding="utf-8", newline="") as handle:
+        return handle.read()
+
+
+def test_per_hunk_resolution_in_a_real_rebase(jj_repo):
+    root = jj_repo.root
+    jj_repo.write(root, "f.txt", "a\nb\nc\nd\ne\nf\ng\n")
+    jj_repo.commit(root, "lines")
+    jj_repo.run(root, "bookmark", "create", "lines", "-r", "@-")
+    jj_repo.write(root, "f.txt", "a\nB1\nc\nd\ne\nF1\ng\n")
+    jj_repo.commit(root, "one")
+    jj_repo.run(root, "bookmark", "create", "one", "-r", "@-")
+    jj_repo.run(root, "new", "lines", "-m", "two")
+    jj_repo.write(root, "f.txt", "a\nB2\nc\nd\ne\nF2\ng\n")
+    jj_repo.run(root, "rebase", "-r", "@", "-d", "one")
+    assert "<<<<<<< conflict 1 of 2" in (root / "f.txt").read_text()
+
+    def conflicts_cli(*args):
+        return subprocess.run(
+            [sys.executable, str(CONFLICTS), *args],
+            cwd=root,
+            env=jj_repo.env,
+            capture_output=True,
+            text=True,
+        )
+
+    shown = json.loads(conflicts_cli("show", "--json").stdout)
+    assert [h["file"] for h in shown] == ["f.txt", "f.txt"]
+    roles = [{s["role"] for s in h["sides"]} for h in shown]
+    assert all("rebase destination" in r and "rebased revision" in r for r in roles)
+    first, second = shown
+    r = conflicts_cli(
+        "accept", "f.txt", "destination", "--hunk", "1", "--expect", first["fingerprint"]
+    )
+    assert r.returncode == 0, r.stderr
+    r = subprocess.run(
+        [
+            sys.executable,
+            str(CONFLICTS),
+            "replace",
+            "f.txt",
+            "2",
+            "--expect",
+            second["fingerprint"],
+        ],
+        cwd=root,
+        env=jj_repo.env,
+        input="F1+F2\n",
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 0, r.stderr
+    assert (root / "f.txt").read_text() == "a\nB1\nc\nd\ne\nF1+F2\ng\n"
+    assert (
+        "conflict"
+        not in jj_repo.run(
+            root, "log", "-r", "@", "--no-graph", "-T", "if(conflict, 'conflict')"
+        ).stdout
+    )

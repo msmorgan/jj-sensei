@@ -625,7 +625,8 @@ def _print_conflict_hunks(root: Path, files: list[str]) -> None:
             print("─" * 64, file=sys.stderr)
             print(
                 f"{path} | hunk {hunk['hunk']}/{hunk['total']} | "
-                f"lines {hunk['start_line']}–{hunk['end_line']}",
+                f"lines {hunk['start_line']}–{hunk['end_line']} | "
+                f"fingerprint {hunk['fingerprint']}",
                 file=sys.stderr,
             )
             sys.stderr.writelines(hunk["raw"])

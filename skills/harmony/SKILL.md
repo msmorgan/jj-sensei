@@ -50,12 +50,16 @@ many, at `@` or in an ancestor:
 2. Run `"<skill-dir>/scripts/repair"` from the affected workspace. It moves
    onto the oldest mutable conflicted change, applies proven-safe hunks, and
    exits `1` listing each remaining marker as `file:line` with its hunk.
-3. Settle every listed file, one way per file:
+3. Settle every listed hunk, by one of:
    - Replace each whole marker block, markers included, with the intended
      content using the file-editing tool. [Read jj conflict markers](references/markers.md)
      says which section is which side.
-   - Take one side for the whole file, where `SIDE` is `snapshot`, `diff`,
-     or `base`: `"<skill-dir>/scripts/conflicts" accept FILE SIDE`.
+   - Settle one hunk at a time, taking a side or writing its content, with
+     `conflicts accept --hunk` or `conflicts replace`; see
+     [Resolve one hunk](references/conflicts.md#resolve-one-hunk).
+   - Take one side for the whole file: `"<skill-dir>/scripts/conflicts" accept
+     FILE SIDE`, naming `SIDE` by role (`destination`, `rebased`) or change ID
+     rather than `snapshot`/`diff`, which can swap between hunks.
    - A generated file: take one side with `accept`, then rerun its generator
      instead of merging markers. [Generated files](references/conflicts.md#generated-files)
      has the procedure.
