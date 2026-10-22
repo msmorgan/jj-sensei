@@ -6,3 +6,4 @@ uv.lock
 build/
 *.egg-info/
 dist/
+.workspaces/
