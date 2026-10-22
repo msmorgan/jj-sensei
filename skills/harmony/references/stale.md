@@ -4,11 +4,16 @@ A stale workspace rejects ordinary working-copy commands. Inspect it without
 changing working-copy state by adding `--ignore-working-copy` to a read-only jj
 command.
 
-`jj workspace update-stale`, which `repair` runs first, is not necessarily
-lossless. If another workspace abandoned this one's working-copy commit, it
-moves this workspace to a fresh empty commit and rewrites disk to match:
-tracked edits revert and files existing only in the abandoned change are
-removed.
+`repair` is the path for a stale workspace: it runs `jj workspace update-stale`
+first, then converges working-copy successors and walks conflicts, all under a
+per-workspace lock with a resumable journal. A bare `jj workspace update-stale`
+is not the path; it has produced a concurrent-modification rebase and a
+divergent working copy.
+
+`update-stale` is not necessarily lossless. If another workspace abandoned
+this one's working-copy commit, it moves this workspace to a fresh empty
+commit and rewrites disk to match: tracked edits revert and files existing
+only in the abandoned change are removed.
 
 State that cost before running the repair and name the read-only recovery
 route in the same breath:

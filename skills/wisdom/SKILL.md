@@ -134,6 +134,10 @@ been customized.
   workspaces; reserved for the user. *Reading* it is fine: `jj --no-pager op
   log`, `op show <op>`, and `--at-op <op>` with a read-only command are
   allowed diagnostics.
+- **Read the output of a command that can conflict.** `squash`, `rebase`,
+  `absorb`, and `restore` record conflicts instead of failing, and jj prints
+  the notice only once. End the command chain there; run the next command
+  only after the output shows no new conflict, or route to `harmony`.
 - **Honor immutability refusals.** A refusal almost always means the
   request *as understood* would rewrite published history — report which
   revision and why in a sentence or two, then ask. Never reinterpret the

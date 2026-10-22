@@ -24,7 +24,7 @@ read-only evidence or load `knowledge` before choosing a repair.
 | State or request | Procedure |
 |---|---|
 | `(conflict)` on a revision, `×` in the log graph, `<<<<<<<` in a file | [Resolve conflicts](#3-resolve-conflicts), below |
-| `Error: The working copy is stale` | [Realign a stale workspace](references/stale.md) |
+| `Error: The working copy is stale` | [Realign a stale workspace](references/stale.md), then `repair`, never a bare `jj workspace update-stale` |
 | Divergent successors of this workspace's working copy | [Converge working-copy successors](references/divergence.md) |
 | Divergence elsewhere in the graph | `knowledge`: `rtfd docs/guides/divergence` |
 | Recover one path from operation snapshots | [Recover a file](references/recovery.md) |
