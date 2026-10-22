@@ -61,6 +61,10 @@ conflicted change outside `::@`.
 
 ## 4. Run the repair helper
 
+Run `repair` only from the workspace that owns the affected change. When
+another workspace's problem blocks you, report it to that workspace's owner
+and wait; don't repair it yourself.
+
 For a stale workspace or working-copy divergence, run `repair` after its
 reference; it realigns and converges before its conflict walk. Run it bare so
 its exit status remains visible:

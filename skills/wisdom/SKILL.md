@@ -143,7 +143,9 @@ been customized.
   log -r '<target>' --no-graph -T 'immutable'`, or the `why-immutable` helper
   below for the clause and anchor.
 - **Stay in the current workspace directory.** Operate there instead of
-  retargeting another workspace with `-R`/`--repository`.
+  retargeting another workspace with `-R`/`--repository`. Repair only the
+  changes your own workspace owns; when another workspace's problem blocks
+  you, report it to that workspace's owner and wait.
 - **Use jj exclusively for version control.** In a colocated repository, jj
   owns version-control mutations and Git synchronization.
 - **Stop at a guardrail.** State the limitation without proposing an
