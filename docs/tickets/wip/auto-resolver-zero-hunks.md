@@ -1,11 +1,33 @@
 # Find out why `conflicts auto` resolved 0 hunks in 9 conflicts
 
-Across all 9 conflicts where the helper ran, it auto-resolved 0 hunks; agents
-resolved every one (21 with ad-hoc Python edits, 9 by hand). Median conflict
-size was 18 lines.
+Source: October 2026 study of 48 jj problem occasions across 30 agent sessions, mostly in deckmaste.rs (a Rust/Lean repo using jj-kata). Episode IDs (epNNN) refer to that study.
 
-- Pull the hunks from those 9 runs and classify: was any mechanically safe?
-- If none, demote `auto` in conflicts.md to a passing mention.
-- If some, widen the resolver for those shapes, with tests.
+Every time the helper's conservative auto-resolution ran on a file conflict
+it resolved nothing; agents resolved all of them by hand (mostly with ad hoc
+Python edits). Median conflict size was 18 lines.
 
-Evidence: /tmp/claude-1000/-home-msmorgan-Projects-resume/ec810bb7-3850-4b45-9515-43e60d12bd21/scratchpad/ep_results/, /tmp/claude-1000/-home-msmorgan-Projects-resume/ec810bb7-3850-4b45-9515-43e60d12bd21/scratchpad/occasions.json
+| Episode | Files | Hunks | Lines |
+|---|---|---|---|
+| ep005 | lean/Semantics/Phrase.lean (deriving list) | 1 | 3 |
+| ep017 | macro_def.rs, declarations.rs | 2 | 17 |
+| ep020 | Check/Phrase.lean, amplify.ron | 4 | 25 |
+| ep021 | Check/Abilities.lean, Facts.lean, Declared.lean (last two generated) | 8 | ? |
+| ep022 | expansions.rs, Facts.lean (generated), Proofs.lean | 4 | ? |
+| ep027 | docs/decisions/semantics-v2.md | 1 | 69 |
+| ep031 | Check/Abilities.lean | 2 | 8 |
+| ep035 | radio.py, types.py, test_radio.py (adjacent-line edits) | 3 | 311* |
+| ep047 | semantics-v2.md, two Rust test files | 3 | 85 |
+
+*derived from conflict-header line ranges, not counted.
+
+Several were described as "adjacent-line" clashes (ep008, ep035), which is the
+shape most likely to be mechanically mergeable.
+
+Done when:
+
+- Representative hunk shapes are captured as test fixtures under
+  `tests/fixtures/` (minimised; no need to keep the original project text).
+- Each shape is classified: mechanically safe or not, and why `auto` declined.
+- Either `auto` is widened for the safe shapes (with tests), or, if none are
+  safe, `references/conflicts.md` demotes `auto` to a passing mention.
+- Findings are written into this ticket for `per-hunk-accept` to build on.
