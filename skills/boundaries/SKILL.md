@@ -94,4 +94,10 @@ though it is not itself returned by `immutable_heads()`.
 which can be deleted before or after — it is the resolution for the
 orphaned registrations this helper reports, and as above it stays a
 human-confirmed step, not an agent's call. After that confirmation, use
-`jj --no-pager workspace forget feature-x`.
+`jj --no-pager workspace forget feature-x`. In a colocated repository it
+also removes the workspace's Git worktree when one exists.
+
+`workspace remove` is different: it snapshots the workspace and then deletes
+its directory from disk. Like `forget`, it is the user's call, never an
+agent's cleanup step — and never the answer to an orphaned registration,
+whose directory may only be unmounted.

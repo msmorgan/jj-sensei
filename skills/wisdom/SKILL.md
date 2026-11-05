@@ -83,11 +83,13 @@ editor-avoidance requirement.
 
 **Use non-interactive forms exclusively.** Commands that require an editor or
 terminal UI are unavailable: interactive `split`/`squash`/`absorb` (`-i`, or
-`split` with no fileset), `diffedit`, `resolve` without `--tool`, `arrange`,
-`converge` without `--no-interactive`, `config edit`, and bare
-`describe`/`commit` without `-m`. Use these forms:
-a `FILESET` argument to `split`/`squash`, `-m`/`-u` for descriptions,
-hand-edited conflict markers for `resolve`, and `jj --no-pager config set
+`split` with no fileset), `diffedit`, `resolve` without `--tool` or with
+`--tool :editor`, `file edit`, `arrange`, `converge` without
+`--no-interactive`, `config edit`, and bare `describe`/`commit` without `-m`.
+Use these forms: a `FILESET` argument to `split`/`squash`, `-m`/`-u` for
+descriptions, hand-edited conflict markers for `resolve`, an edit in `@`
+moved with `squash --into REV FILESET` for `file edit` (or `jj --no-pager file delete
+-r REV FILESET` when the edit is a deletion), and `jj --no-pager config set
 --repo KEY VALUE` (or `--user`) for `config edit`. A fileset selects whole
 paths, so it cannot separate two hunks *within* one file; when a split runs
 mid-file, say so, then propose a semantic boundary or use
