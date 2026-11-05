@@ -63,6 +63,7 @@ editor-avoidance requirement.
 | switch lines of work | `jj --no-pager edit <change>` to move onto one; `jj --no-pager new <base> -m "..."` to start one |
 | who wrote this line (`git blame`) | `jj --no-pager file annotate PATH`; corroborate the last-touch result with that change's diff |
 | stop tracking an ignored file | `jj --no-pager file untrack PATH` |
+| set work aside for later / move premature or out-of-scope work off the current line | [Park valid work](references/placement.md#park-valid-work) |
 | uncommit / discard / revert / drop / recover lost work | [Undo without operation-log surgery](references/undoing.md) |
 | split / reorder / rebase / cherry-pick / merge / insert mid-stack | [Place changes deliberately](references/placement.md) |
 | push or publish work | [Push work](references/shipping/push.md) |
@@ -114,6 +115,17 @@ correct, not a failure.**
   anonymous. Resolve it by matching the description across `jj --no-pager log
   -T builtin_log_oneline`, then **confirm the match with the user before
   acting on it**. A description match is a hypothesis, not a referent.
+
+**Park valid work; discard only what is wrong.** Work that is sound but
+premature, out of scope for the current task, or in the wrong commit or layer
+is not unwanted — it is misplaced. In jj, keeping it costs one command: park
+it as its own head with `jj --no-pager rebase -r REV -o BASE`, carve the
+out-of-scope paths off with `jj --no-pager split`, or continue from an earlier
+change with `jj --no-pager new EARLIER -m "..."` and leave the later commits
+standing. See [Park valid work](references/placement.md#park-valid-work).
+`abandon` and `restore` are for work that is substantively wrong or that the
+user has said they don't want; when a change looks unwanted only because the
+plan moved, park it and say where it went.
 
 **`jj --no-pager bookmark list --all` and `jj --no-pager log` are the ground
 truth for refs.** There's no separate git layer underneath to double-check. If

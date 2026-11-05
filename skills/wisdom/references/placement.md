@@ -97,6 +97,35 @@ Its positional arguments are the new change's **parents**, and `-r`/`-o` are
 aliases for those positionals — not the `--onto` of `rebase`. `jj new -o main`
 therefore means "parent is main", not "onto main".
 
+## Park valid work
+
+When the plan changes under finished work — it belongs to a later ticket, a
+different layer, or another commit — park it rather than rewriting it later.
+A parked change is an ordinary mutable head: it keeps its change ID and
+description, stays in the default `jj --no-pager log`, and can be rebased
+back in, split, or squashed into its real destination whenever that step
+arrives.
+
+```bash
+# Step off: move the stack aside as its own head, forked from BASE
+jj --no-pager rebase -r 'FIRST::LAST' -o BASE
+# Carve out-of-scope paths into their own change, then park that half
+jj --no-pager split -r REV -m 'in-scope part' FILESET
+# Leave later commits standing and continue from an earlier change
+jj --no-pager new EARLIER -m 'the current step'
+```
+
+`-r 'FIRST::LAST'` moves only that stack: anything built on top of it,
+including `@`, stays on the current line, re-parented onto `FIRST`'s parent.
+Give a parked change a description that says why it is parked (`jj
+--no-pager describe -r REV -m '...'`) so it reads as deliberate in the log.
+
+When the work must move to different paths — another crate, module, or
+package — the relocation is a new edit, not a reason to discard the
+original. Build the relocated version on the right line, reading the parked
+change as its source with `jj --no-pager file show -r PARKED PATH`. Once it
+has landed, the parked original is superseded; ask before abandoning it.
+
 ## The same placement model elsewhere
 
 `jj split`, `jj revert`, and `jj duplicate` take the same `-o`/`-A`/`-B`
