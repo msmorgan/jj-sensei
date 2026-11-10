@@ -32,6 +32,7 @@ don't repair it yourself.
 | `Error: The working copy is stale` | [Realign a stale workspace](references/stale.md), then `repair`, never a bare `jj workspace update-stale` |
 | Divergent successors of this workspace's working copy | [Converge working-copy successors](references/divergence.md) |
 | Divergence elsewhere in the graph | `knowledge`: `rtfd docs/guides/divergence` |
+| `⚠ NEW DIVERGENCE` or a divergent-count suffix in the status line | Diagnose whose copies they are; converge only this workspace's own working copy or ancestry, and report other workspaces' copies to their owner without abandoning them |
 | Recover one path from operation snapshots | [Recover a file](references/recovery.md) |
 | Orphaned workspace registration | `boundaries`; the user decides whether to forget it |
 

@@ -45,6 +45,7 @@ editor-avoidance requirement.
 | `(conflict)` on a revision, `×` in the log graph, `<<<<<<<` in a file | `harmony` skill, Resolve conflicts |
 | `Error: The working copy is stale` | `harmony` skill |
 | `(divergent)`, or a change ID with a `/0`/`/1` suffix | `harmony` for this workspace's divergent working copy; otherwise `knowledge` for `rtfd docs/guides/divergence` |
+| `⚠ NEW DIVERGENCE`, `⚠ @ or its ancestors divergent`, or `⚠ N divergent commits repo-wide` | Stop building on the copies and report the alarm's change ID, op, and workspace to the user or coordinator; copies you did not create are not yours to abandon. Then `harmony` for this workspace's own working copy or ancestry; otherwise `knowledge` for `rtfd docs/guides/divergence` |
 | An immutability refusal | [Immutable-target triage](references/undoing.md#immutable-target-triage) |
 | `[updated] untracked` after a fetch | [Fetch and track upstream](references/shipping/sync.md) |
 | `Refused to snapshot some files`, or a `?` path under `Untracked paths:` | The path exceeds `snapshot.max-new-file-size` or is excluded by `snapshot.auto-track`; use `jj --no-pager file track --include-ignored PATH` when it belongs in history, otherwise leave or ignore it |
@@ -168,7 +169,7 @@ been customized.
   `(divergent)` for a change you did not create, stop and report it; don't
   abandon your tip and continue. When the status line or jj says the working
   copy is stale, repair through `harmony` before any other jj command or file
-  edit, and never run `jj workspace update-stale` in a chain or script.
+  edit; never run a bare `jj workspace update-stale`, since `repair` runs it.
 - **Honor immutability refusals.** A refusal almost always means the
   request *as understood* would rewrite published history — report which
   revision and why in a sentence or two, then ask. Never reinterpret the
