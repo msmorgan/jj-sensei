@@ -8,9 +8,12 @@ if [ ! -t 0 ]; then
     payload=$(cat)
 fi
 
-# AGY calls PreInvocation before every model invocation. Its first invocation is
-# zero, so later invocations must return an empty response rather than repeatedly
-# injecting the startup guide. Claude's SessionStart payload has no invocationNum.
+# AGY calls PreInvocation before every model invocation, and invocationNum
+# restarts at zero on every user prompt. The guide is therefore injected at the
+# first invocation of each user turn, not once per session; that repetition is
+# relied on to restore the instruction after context compaction. Later
+# invocations in a turn return an empty response. Claude's SessionStart payload
+# has no invocationNum.
 agy_invocation=""
 if [ -n "$payload" ]; then
     agy_invocation=$(printf '%s' "$payload" | python3 -c '
