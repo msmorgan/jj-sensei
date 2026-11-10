@@ -34,17 +34,37 @@ colocated Git repository. Outside a jj repository, the hook emits nothing.
 
 A second hook shows a compact live status line at session start and after
 each file-writing or shell tool: workspace and working-copy change, a
-description and edit-volume summary, and conflicts, stale workspaces, and
-bookmarks on `@` made hard to miss. Post-tool probes eagerly snapshot
-agent-authored filesystem edits, suppressing repeated context until rendered
-state changes. Beyond ambient visibility, these eager snapshots continuously
-populate jj's evolution log (`jj evolog`), turning raw tool executions into an
-addressable patch-level trace that lets agents reconstruct clean commit series
-after the fact.
+description and edit-volume summary, and conflicts, stale workspaces,
+bookmarks on `@`, orphaned workspaces, and divergence made hard to miss. When a
+shell command starts with `cd <workspace> &&` (or `;`), the line describes that
+workspace rather than the tool's reported directory. Post-tool probes eagerly
+snapshot agent-authored filesystem edits, suppressing a repeated line until
+rendered state changes. Warnings about the workspace's own state — a stale
+working copy, a workspace jj cannot read or the hook could not probe, or
+divergence under `@` — are the exception and repeat on every call until they
+clear. Suppression is tracked per workspace and per agent, so subagents
+sharing their parent's session each see the line. Beyond
+ambient visibility, these eager snapshots continuously populate jj's evolution
+log (`jj evolog`), turning raw tool executions into an addressable patch-level
+trace that lets agents reconstruct clean commit series after the fact.
 
-Status and history-repair operations share one short workspace lock. The hook
-never repairs, unstales, or changes graph topology, and always lets the turn
-continue. Antigravity receives changed status on the next invocation after a
+Divergence is watched repo-wide, not just under `@`: the hook remembers the
+set of `divergent() & mutable()` commits in the repository's shared `.jj/repo`
+directory, so growth caused anywhere — another workspace, another agent, a
+background command — is noticed by the next hook call in any workspace. Each
+agent is shown such growth once, as a separate line naming the change, the
+number of visible copies, and the operation that created them (its workspace
+and command line), followed by standing `⚠ @ or its ancestors divergent` and
+`⚠ N divergent commits repo-wide` suffixes on the status line until the twins
+are resolved. Only the first of those repeats on every call; the repo-wide
+count, like the orphaned-workspace notice, is shown once per agent and again
+whenever it changes, since one agent usually cannot fix another's commits. Divergence that already exists when jj-sensei first looks at a
+repository is reported by the suffix only.
+
+Status and history-repair operations share one short workspace lock. The
+divergence probe runs outside it, so a busy workspace still reports
+divergence. The hook never repairs, unstales, or changes graph topology, and
+always lets the turn continue. Antigravity receives changed status on the next invocation after a
 tool call; Claude Code and Codex receive it directly.
 
 ## Skills

@@ -7,6 +7,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import divergence as divergence_probe
+from .divergence import Alarm, Divergence
 from .jj import Jj, JjError
 from .repair import LockTimeout, WorkspaceLock
 
@@ -19,21 +21,58 @@ _BOOKMARKS_TEMPLATE = 'bookmarks.map(|bookmark| bookmark.name()).join(",")'
 class Status:
     root: Path
     line: str
+    # NEW-divergence alarms still standing repo-wide. Which of them a given
+    # agent has already been shown is the caller's bookkeeping.
+    alarms: tuple[Alarm, ...] = ()
+    # Whether hooks must repeat this line on every call instead of
+    # deduplicating it. Only warnings about this workspace's own state, which
+    # its agent should act on, repeat; standing repo-wide notices (the
+    # divergent count, an orphaned workspace) and the bookmark and conflict
+    # warnings are shown once per consumer and again whenever the line changes.
+    repeat: bool = False
 
 
 def render_status(cwd: Path | str | None = None) -> Status | None:
-    """Snapshot and render a workspace, or stay silent if it cannot be probed safely."""
+    """Snapshot and render a workspace, or stay silent if it cannot be probed safely.
+
+    The repo-wide divergence probe runs first, outside the workspace lock, so
+    a busy or unreadable workspace still reports divergence made anywhere.
+    """
     jj = Jj(cwd)
     try:
         root = jj.workspace_root()
-        with WorkspaceLock(root, timeout=0.25):
-            return _render_locked(jj, root)
-    except (JjError, LockTimeout, OSError, RuntimeError, ValueError):
+    except (JjError, OSError, RuntimeError, ValueError):
         return None
+    divergence = divergence_probe.probe(jj, root)
+    try:
+        with WorkspaceLock(root, timeout=0.25):
+            status = _render_locked(jj, root, divergence)
+    except LockTimeout:
+        status = _render_unlocked(jj, root, divergence, "@ not probed (workspace busy)")
+    except (JjError, OSError, RuntimeError, ValueError):
+        status = _render_unlocked(jj, root, divergence, "@ not probed (jj error)")
+    if status is None:
+        return None
+    alarms = divergence.alarms if divergence is not None else ()
+    return Status(status.root, status.line, alarms, status.repeat)
 
 
-def _render_locked(jj: Jj, root: Path) -> Status:
+def _render_unlocked(
+    jj: Jj, root: Path, divergence: Divergence | None, reason: str
+) -> Status | None:
+    """A degraded line that still carries repo-wide warnings, or silence."""
+    if divergence is None or not (divergence.count or divergence.alarms):
+        return None
+    try:
+        name = jj.current_workspace().name
+    except (JjError, OSError, RuntimeError, ValueError):
+        name = root.name
+    return Status(root, f"jj: {name} | {reason}{divergence.suffix}", repeat=True)
+
+
+def _render_locked(jj: Jj, root: Path, divergence: Divergence | None = None) -> Status:
     workspace = jj.current_workspace()
+    suffix = divergence.suffix if divergence is not None else ""
 
     # This is the intentional write: status hooks run after mutating tools so
     # their filesystem edits become a jj snapshot promptly. Every later query
@@ -45,9 +84,14 @@ def _render_locked(jj: Jj, root: Path) -> Status:
             return Status(
                 root,
                 f"jj: {workspace.name} | ⚠ STALE working copy — use harmony before "
-                "trusting anything here",
+                "trusting anything here" + suffix,
+                repeat=True,
             )
-        return Status(root, f"jj: {workspace.name} | ⚠ jj could not read this workspace")
+        return Status(
+            root,
+            f"jj: {workspace.name} | ⚠ jj could not read this workspace{suffix}",
+            repeat=True,
+        )
 
     current = jj.one_commit("@")
     bookmarks = jj.run(
@@ -79,7 +123,15 @@ def _render_locked(jj: Jj, root: Path) -> Status:
     orphaned = [other.name for other in jj.workspaces() if other.orphaned]
     if orphaned:
         line += f" | ⚠ orphaned workspace '{','.join(orphaned)}' — needs `jj workspace forget`"
-    return Status(root, line)
+    # Only paid for when something is divergent at all: the repo-wide set is
+    # already known, and `@`'s ancestry can only intersect a non-empty set.
+    repeat = False
+    if divergence is not None and divergence.count:
+        if jj.commits(f"::@ & ({divergence_probe.DIVERGENT_REVSET})"):
+            line += " | ⚠ @ or its ancestors divergent"
+            repeat = True
+        line += divergence.suffix
+    return Status(root, line, repeat=repeat)
 
 
 def _diff_counts(jj: Jj) -> tuple[int, int, int, int, int]:
