@@ -152,6 +152,23 @@ been customized.
   `absorb`, and `restore` record conflicts instead of failing, and jj prints
   the notice only once. End the command chain there; run the next command
   only after the output shows no new conflict, or route to `harmony`.
+- **Run each mutation as its own call, on revisions named in it.** Another
+  workspace can rewrite history at any moment; a commit hash captured or
+  printed earlier may by then name a hidden commit, and mutating on it
+  resurrects its ancestry as divergent copies. Name the change ID or a revset
+  evaluated in that command (`jj --no-pager new 'heads(::@ & ::default@)'`),
+  never a hash, `$VAR`, or `$(...)` from earlier. A leading `cd <workspace>
+  &&` is expected and read-only chains are fine, but never chain a mutation
+  after a build, test, or census, background it, or put it in an ad-hoc
+  script, heredoc, `bash -c`, loop, or `xargs`: the hooks see only the call
+  at launch. Shipped helpers (jj-sensei's scripts, the jj-kata launcher) and
+  project tooling the user asks you to run are exempt.
+- **Read every line a mutation prints.** Never send it to `/dev/null` or
+  `| tail -1`: `(divergent)` appears on the `Parent commit` line. On
+  `(divergent)` for a change you did not create, stop and report it; don't
+  abandon your tip and continue. When the status line or jj says the working
+  copy is stale, repair through `harmony` before any other jj command or file
+  edit, and never run `jj workspace update-stale` in a chain or script.
 - **Honor immutability refusals.** A refusal almost always means the
   request *as understood* would rewrite published history — report which
   revision and why in a sentence or two, then ask. Never reinterpret the
