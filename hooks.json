@@ -8,6 +8,20 @@
       }
     ]
   },
+  "jj-sensei-guard": {
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ./hooks/jj_guard.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
   "jj-sensei-status": {
     "PostToolUse": [
       {

@@ -67,7 +67,8 @@ divergence. The hook never repairs, unstales, or changes graph topology, and
 always lets the turn continue. Antigravity receives changed status on the next invocation after a
 tool call; Claude Code and Codex receive it directly.
 
-A third hook guards shell commands before they run, on Claude Code and Codex.
+A third hook guards shell commands before they run, on Antigravity, Claude
+Code, and Codex.
 A commit id still resolves after another workspace rewrites and hides that
 commit, and `jj new`, `rebase`, `squash`, and the other mutating commands
 then resurrect it and its hidden ancestry as divergent copies. The guard
@@ -83,7 +84,10 @@ without a snapshot. The guard reads the command text only: chains and
 `bash -c '...'` bodies are scanned, but script files are out of its sight,
 and for them the status hook's repo-wide divergence alarm is the backstop.
 Anything the guard cannot read, or any jj failure, lets the command proceed.
-Antigravity and OpenCode do not run it.
+When it does not deny, it never approves either, so the host's own permission
+prompts are unchanged. Antigravity shows a hook's message to the model only
+with a denial, so there a warning arrives with the status line on the next
+model invocation instead. OpenCode does not run the guard.
 
 ## Skills
 

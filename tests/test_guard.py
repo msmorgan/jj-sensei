@@ -311,3 +311,182 @@ def test_guard_is_registered_for_bash_before_tool_use():
     assert [entry["matcher"] for entry in entries] == ["Bash"]
     command = entries[0]["hooks"][0]["command"]
     assert command.endswith('/hooks/jj_guard.py"')
+
+
+# --- Antigravity --------------------------------------------------------------
+
+STATUS_HOOK = ROOT / "hooks" / "jj_status.py"
+
+
+def _agy_payload(cwd: Path, command: str, **overrides) -> dict:
+    """The shape of a real Antigravity `PreToolUse` payload for `run_command`."""
+    payload = {
+        "conversationId": "2cd1403b-68c4-45a1-8df1-8834350f2023",
+        "cwd": str(cwd),
+        "workspacePaths": [str(cwd)],
+        "hookEventName": "PreToolUse",
+        "lastUserInput": "do the thing",
+        "modelName": "gemini-4-argon-low",
+        "stepIdx": 3,
+        "toolCall": {
+            "id": "call_1",
+            "name": "run_command",
+            "args": {"CommandLine": command, "WaitMsBeforeAsync": 5000},
+        },
+    }
+    payload.update(overrides)
+    return payload
+
+
+def run_agy_guard(cwd: Path, command: str, **overrides) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        [sys.executable, str(HOOK)],
+        input=json.dumps(_agy_payload(cwd, command, **overrides)),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    return result
+
+
+def run_status(payload: dict) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        [sys.executable, str(STATUS_HOOK)],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    return result
+
+
+def _pending(workspace: Path) -> list[Path]:
+    return list((workspace / ".jj" / "jj-sensei").glob("warnings-pending.*"))
+
+
+def test_antigravity_guard_denies_a_hidden_commit_id(resurrect):
+    root, old, change, _ = resurrect
+
+    result = run_agy_guard(root, f"jj --no-pager new {old}")
+
+    output = json.loads(result.stdout)
+    assert set(output) == {"decision", "reason"}
+    assert output["decision"] == "deny"
+    assert f"{old[:12]} is a hidden (rewritten) commit" in output["reason"]
+    assert f"Its change is {change[:8]}" in output["reason"]
+
+
+def test_antigravity_guard_reads_the_command_cwd_argument(resurrect):
+    root, old, _, _ = resurrect
+
+    result = run_agy_guard(root.parent, f"jj --no-pager new {old}")
+    assert result.stdout == ""
+
+    tool_call = {"name": "run_command", "args": {"CommandLine": f"jj new {old}", "Cwd": str(root)}}
+    result = run_agy_guard(root.parent, "", toolCall=tool_call)
+    assert json.loads(result.stdout)["decision"] == "deny"
+
+
+def test_antigravity_guard_prints_nothing_when_it_has_no_objection(resurrect):
+    root, old, change, _ = resurrect
+
+    # Empty stdout leaves Antigravity's permission flow untouched; `{}` would deny.
+    assert run_agy_guard(root, f"jj --no-pager new {change[:8]}").stdout == ""
+    assert run_agy_guard(root, f"jj --no-pager log -r {old}").stdout == ""
+    assert run_agy_guard(root, "cargo test").stdout == ""
+    other_tool = {"name": "view_file", "args": {"CommandLine": f"jj new {old}"}}
+    assert run_agy_guard(root, "", toolCall=other_tool).stdout == ""
+    assert run_agy_guard(root, f"jj new {old}", hookEventName="PostToolUse").stdout == ""
+    assert _pending(root) == []
+
+
+def test_antigravity_guard_defers_a_warning_to_the_next_invocation(resurrect):
+    root, _, _, _ = resurrect
+
+    warned = run_agy_guard(root, 'jj --no-pager new "$OLD"')
+    assert warned.stdout == ""
+    assert len(_pending(root)) == 1
+
+    # The status hook's PostToolUse for the same call queues its own line;
+    # it must not overwrite the warning.
+    root.joinpath("new.txt").write_text("one\n")
+    post = run_status(
+        {
+            "conversationId": _agy_payload(root, "")["conversationId"],
+            "workspacePaths": [str(root)],
+            "cwd": str(root),
+            "toolCall": {"name": "run_command", "args": {"CommandLine": 'jj new "$OLD"'}},
+        }
+    )
+    assert json.loads(post.stdout) == {}
+
+    invocation = {
+        "conversationId": _agy_payload(root, "")["conversationId"],
+        "workspacePaths": [str(root)],
+        "invocationNum": 1,
+    }
+    delivered = run_status(invocation)
+    message = json.loads(delivered.stdout)["injectSteps"][0]["ephemeralMessage"]
+    warning, _, status = message.partition("\n\n")
+    assert "$OLD" in warning
+    assert "Write the change id or revset inline" in warning
+    assert status.startswith("jj: default | @ ")
+    assert _pending(root) == []
+
+    assert json.loads(run_status(invocation).stdout) == {}
+
+
+def test_antigravity_guard_queues_a_stale_workspace_warning_once(stale):
+    _, ws2 = stale
+
+    for _ in range(2):
+        assert run_agy_guard(ws2, "jj --no-pager commit -m x").stdout == ""
+
+    delivered = run_status(
+        {
+            "conversationId": _agy_payload(ws2, "")["conversationId"],
+            "workspacePaths": [str(ws2)],
+            "invocationNum": 2,
+        }
+    )
+    message = json.loads(delivered.stdout)["injectSteps"][0]["ephemeralMessage"]
+    assert message.count("workspace ws2 is STALE") == 1
+    assert "harmony" in message
+
+
+def test_antigravity_guard_fails_open(tmp_path, resurrect):
+    root, old, _, _ = resurrect
+
+    assert run_agy_guard(tmp_path, f"jj new {old}").stdout == ""  # not a jj workspace
+    assert run_agy_guard(root, f"jj new '{old}").stdout == ""  # unbalanced quote
+    assert run_agy_guard(root, "", toolCall={"name": "run_command"}).stdout == ""
+
+    result = subprocess.run(
+        [sys.executable, str(HOOK)],
+        input=json.dumps(_agy_payload(root, f"jj new {old}")),
+        capture_output=True,
+        text=True,
+        env={"PATH": str(tmp_path)},  # jj cannot be found
+    )
+    assert (result.returncode, result.stdout) == (0, "")
+
+
+def test_guard_is_registered_for_antigravity_run_command():
+    manifest = json.loads((ROOT / "hooks.json").read_text())
+
+    assert manifest["jj-sensei-guard"] == {
+        "PreToolUse": [
+            {
+                "matcher": "run_command",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "python3 ./hooks/jj_guard.py",
+                        "timeout": 10,
+                    }
+                ],
+            }
+        ]
+    }
