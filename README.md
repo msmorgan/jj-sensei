@@ -65,7 +65,10 @@ Status and history-repair operations share one short workspace lock. The
 divergence probe runs outside it, so a busy workspace still reports
 divergence. The hook never repairs, unstales, or changes graph topology, and
 always lets the turn continue. Antigravity receives changed status on the next invocation after a
-tool call; Claude Code and Codex receive it directly.
+tool call; Claude Code and Codex receive it directly. Antigravity has no
+per-session start for this hook: it shows the line the first time a
+conversation looks at a workspace, and at the start of each later user turn
+only when the line changed or carries a repeating warning.
 
 A third hook guards shell commands before they run, on Antigravity, Claude
 Code, and Codex.

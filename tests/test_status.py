@@ -290,3 +290,69 @@ def test_status_survives_and_flags_an_orphaned_workspace(jj_repo):
     assert status.line.startswith("jj: default | @ ")
     assert "⚠ orphaned workspace 'dead'" in status.line
     assert "jj workspace forget" in status.line
+
+
+def _turn_start(workspace: Path, conversation: str = "agy-turns") -> dict[str, object]:
+    """Antigravity's first PreInvocation of a user turn: invocationNum restarts at 0."""
+    return {
+        "conversationId": conversation,
+        "workspacePaths": [str(workspace)],
+        "cwd": str(workspace),
+        "invocationNum": 0,
+    }
+
+
+def _injected(result: subprocess.CompletedProcess[str]) -> str | None:
+    assert result.returncode == 0
+    steps = json.loads(result.stdout).get("injectSteps")
+    return steps[0]["ephemeralMessage"] if steps else None
+
+
+def test_antigravity_first_turn_emits_the_line_and_sweeps(jj_repo):
+    directory = jj_repo.root / ".jj" / "jj-sensei"
+    directory.mkdir(parents=True, exist_ok=True)
+    ancient = directory / "status.ancient"
+    ancient.write_text("old")
+    old = time.time() - 30 * 24 * 60 * 60
+    os.utime(ancient, (old, old))
+
+    message = _injected(_run_hook(_turn_start(jj_repo.root)))
+
+    assert message is not None
+    assert message.startswith("jj: default | @ ")
+    assert not ancient.exists()
+
+
+def test_antigravity_later_turns_emit_only_a_changed_line(jj_repo):
+    assert _injected(_run_hook(_turn_start(jj_repo.root))) is not None
+
+    assert _injected(_run_hook(_turn_start(jj_repo.root))) is None
+    assert _injected(_run_hook({**_turn_start(jj_repo.root), "invocationNum": 3})) is None
+
+    jj_repo.write(jj_repo.root, "new.txt", "one\n")
+    changed = _injected(_run_hook(_turn_start(jj_repo.root)))
+    assert changed is not None
+    assert "(no desc) +1/-0" in changed
+
+    assert _injected(_run_hook(_turn_start(jj_repo.root))) is None
+
+
+def test_antigravity_turn_start_repeats_a_stale_warning(jj_repo):
+    feature = jj_repo.add_workspace("feature")
+    jj_repo.write(jj_repo.root, "trunk.txt", "moved\n")
+    jj_repo.commit(jj_repo.root, "move trunk")
+    jj_repo.run(jj_repo.root, "rebase", "-r", "feature@", "-d", "default@-")
+
+    first = _injected(_run_hook(_turn_start(feature)))
+    second = _injected(_run_hook(_turn_start(feature)))
+
+    assert first == second
+    assert first is not None
+    assert "⚠ STALE working copy" in first
+
+
+def test_antigravity_each_conversation_gets_its_own_first_line(jj_repo):
+    assert _injected(_run_hook(_turn_start(jj_repo.root, "one"))) is not None
+    assert _injected(_run_hook(_turn_start(jj_repo.root, "one"))) is None
+
+    assert _injected(_run_hook(_turn_start(jj_repo.root, "two"))) is not None

@@ -51,9 +51,11 @@ def main() -> int:
             queued = take_pending(workspace, token)
             if queued is not None:
                 return _emit_antigravity(queued)
+            # Antigravity restarts invocationNum at 0 on every user prompt. That
+            # first invocation of a turn is the only moment edits made outside
+            # tool calls get noticed, so it renders; later ones stay silent.
             if payload.get("invocationNum") != 0:
                 return _empty(True)
-            at_start = True
 
         status = render_status(cwd)
         if status is None:
@@ -65,6 +67,10 @@ def main() -> int:
         cache = directory / f"status.{token}"
         pending = pending_path(status.root, STATUS_PENDING, token)
         seen = directory / f"alarms.{token}"
+        # Each turn's first PreInvocation is a session start only the first time
+        # this consumer sees this workspace; afterwards it dedupes like any call.
+        if event == "PreInvocation":
+            at_start = not cache.exists()
 
         # A NEW-divergence alarm is shown once to each consumer that has not
         # seen it, whoever's hook call first detected it.
