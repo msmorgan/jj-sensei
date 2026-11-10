@@ -67,6 +67,24 @@ divergence. The hook never repairs, unstales, or changes graph topology, and
 always lets the turn continue. Antigravity receives changed status on the next invocation after a
 tool call; Claude Code and Codex receive it directly.
 
+A third hook guards shell commands before they run, on Claude Code and Codex.
+A commit id still resolves after another workspace rewrites and hides that
+commit, and `jj new`, `rebase`, `squash`, and the other mutating commands
+then resurrect it and its hidden ancestry as divergent copies. The guard
+denies a mutating jj command that names a hidden commit id and replies with
+that commit's change id and current version. In a stale workspace it denies a
+bare `jj workspace update-stale`, which would snapshot on-disk edits at the
+old operation and can fork the working-copy change, and points to `harmony`'s
+`repair` instead. It warns, without blocking, when a mutating command takes
+its revision from a shell variable or command substitution it cannot check,
+and when any other jj command is about to run in a stale workspace. Staleness
+is read from the working copy's checkout record and the operation heads,
+without a snapshot. The guard reads the command text only: chains and
+`bash -c '...'` bodies are scanned, but script files are out of its sight,
+and for them the status hook's repo-wide divergence alarm is the backstop.
+Anything the guard cannot read, or any jj failure, lets the command proceed.
+Antigravity and OpenCode do not run it.
+
 ## Skills
 
 Four skills ship today, forming one lesson: every version control task
@@ -219,7 +237,7 @@ package.json                OpenCode package manifest
 index.js                    OpenCode directory entrypoint
 .opencode/plugins/          OpenCode plugin implementation
 hooks/hooks.json            hook manifest for Claude Code and Codex
-hooks/                      startup guidance and live status hook scripts
+hooks/                      startup guidance, live status, and pre-command guard scripts
 skills/                     the four skills above, loaded by every host
 src/jj_sensei/              shared Python implementation
 ```
