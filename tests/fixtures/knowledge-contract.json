@@ -132,7 +132,7 @@
     "docs/changelog": "sha256:d2b7a7389ca0131590e8617abf2a4b2baf35224a880c27f64233d78255abba84",
     "docs/code-of-conduct": "sha256:c93bd032c40c56132f2c12650ad6424881e8f4ee5b83a85bf80183d58f82f8a1",
     "docs/community-tools": "sha256:4e59cab59c695a96a866e4dfde13a0b85e623a19adb90a41b8f0aa72f1628509",
-    "docs/config": "sha256:36e2ab5fff9fde71481f463aa81d7e255619c13711f9a8f8705bf93dd75eb0be",
+    "docs/config": "sha256:617d3d349ff69208b6b60373ccc11ee5840d2a8030fa36b39cde6852e87c9cb6",
     "docs/conflicts": "sha256:09f83492b69901993ddf68295cdeaae7e820c61bc5181bf2b540620caca4aeb9",
     "docs/contributing": "sha256:a0ff9ee95ec1f1fa852192c8cd7b3e8950d480332ac201a9c542b072a4093143",
     "docs/core-tenets": "sha256:fb351e7c3c74f742f6ec7540a13f7095e1d0ad6d414e396fa42fd716f35a5ee8",
@@ -180,10 +180,10 @@
     "docs/windows": "sha256:449d30c1765c4cc496ffad7f9c8187278a349968fab435c02e0453b44fa60ad1",
     "docs/working-copy": "sha256:d4912d7ac5c8ef9921ef5f2e50a1ee72966111033e01f74993107bc5d68650d1"
   },
-  "jj_version": "jj 0.47.0",
+  "jj_version": "jj 0.47.1",
   "keywords": {
     "bookmarks": "sha256:bd7707039414cd2609e53455eff7bb48f28def2f2a64e285939cba264cd7ceec",
-    "config": "sha256:d7ab6323bea903a3143dfa0041d6dfff48296d37ad8b8ceac46d6972b2139a58",
+    "config": "sha256:b962cca0d2c330a970563357e5593cbdbc1b28e6c72e9f9c77e2a72994bc688d",
     "filesets": "sha256:c969a3121f7c87ec6125badb51df981d4ee4cf95dc3293a1a5e84b828d1e652d",
     "glossary": "sha256:b0cf0aee2197820883c37d7478ef1e7b1a35db51f40e720a339975b25fa97355",
     "revsets": "sha256:ef8e62d3ef471737cabc4a37a82c1415c28c1e30c7ae7c13c09815aa8557658e",
