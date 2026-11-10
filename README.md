@@ -17,7 +17,9 @@ When a session starts anywhere beneath a `.jj/` directory, jj-sensei injects
 a one-line preamble — in Antigravity, only before the first model invocation.
 It positively names `jj` as the repository's exclusive version-control tool
 and has the agent load the `wisdom` skill once, before its first
-version-control command (status included).
+version-control command (status included). Context compaction evicts the
+skill text even when the summary lists it as loaded, so the preamble has the
+agent load it once more after compaction.
 
 Everything else is pulled on demand rather than pushed into every session.
 `wisdom` is the hub an agent lands on: jj's model in a paragraph, the rules

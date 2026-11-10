@@ -34,6 +34,19 @@ def test_claude_session_start_emits_plain_context(tmp_path):
     assert result.stdout.startswith("Use Jujutsu (`jj`) exclusively")
 
 
+def test_context_keeps_load_once_but_reloads_after_compaction():
+    """`once` and `stays in context` stop agents re-reading the skill before every
+    jj command; the compaction clause stops them trusting a summary that merely
+    lists wisdom as loaded after the skill text itself was evicted."""
+    context = (ROOT / "hooks" / "jj-context.md").read_text()
+
+    assert "skill once, before your first version-control command" in context
+    assert "from then on it stays in context" in context
+    assert "Context compaction evicts it" in context
+    assert "even when the summary lists it as loaded" in context
+    assert "load it once more after compaction" in context
+
+
 def test_agy_first_invocation_injects_ephemeral_context(tmp_path):
     workspace = jj_workspace(tmp_path)
 
