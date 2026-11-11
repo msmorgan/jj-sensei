@@ -75,6 +75,156 @@ def test_agy_outside_jj_workspace_does_not_inject(tmp_path):
     assert json.loads(result.stdout) == {}
 
 
+PREAMBLE = (ROOT / "hooks" / "jj-context.md").read_text()
+
+
+def step(index: int, step_type: str, content: str, **extra: object) -> dict:
+    source = {"EPHEMERAL_MESSAGE": "SYSTEM_SDK", "CHECKPOINT": "SYSTEM"}.get(
+        step_type, "USER_EXPLICIT"
+    )
+    return {
+        "step_index": str(index),
+        "source": source,
+        "type": step_type,
+        "status": "DONE",
+        "created_at": "2026-11-11T00:00:00Z",
+        "content": content,
+        **extra,
+    }
+
+
+def write_transcript(tmp_path: Path, *steps: dict) -> Path:
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text("".join(json.dumps(s) + "\n" for s in steps))
+    return transcript
+
+
+def run_agy_first_invocation(workspace: Path, transcript: Path, invocation: int = 0) -> object:
+    result = run_hook(
+        {
+            "invocationNum": invocation,
+            "workspacePaths": [str(workspace)],
+            "transcriptPath": str(transcript),
+        }
+    )
+    assert result.returncode == 0
+    return json.loads(result.stdout)
+
+
+def injects(response: object) -> bool:
+    return response == {"injectSteps": [{"ephemeralMessage": PREAMBLE}]}
+
+
+def test_agy_injects_on_a_transcript_with_only_user_input(tmp_path):
+    transcript = write_transcript(tmp_path, step(0, "USER_INPUT", "hello"))
+
+    assert injects(run_agy_first_invocation(jj_workspace(tmp_path), transcript))
+
+
+def test_agy_does_not_repeat_a_preamble_already_in_the_transcript(tmp_path):
+    transcript = write_transcript(
+        tmp_path,
+        step(0, "USER_INPUT", "hello"),
+        step(1, "EPHEMERAL_MESSAGE", PREAMBLE),
+        step(2, "PLANNER_RESPONSE", "hi"),
+        step(3, "USER_INPUT", "again"),
+    )
+
+    assert run_agy_first_invocation(jj_workspace(tmp_path), transcript) == {}
+
+
+def test_agy_reinjects_after_a_compaction_checkpoint(tmp_path):
+    transcript = write_transcript(
+        tmp_path,
+        step(1, "EPHEMERAL_MESSAGE", PREAMBLE),
+        step(2, "PLANNER_RESPONSE", "hi"),
+        step(3, "CHECKPOINT", "# Resuming from a compaction\n\nsummary"),
+        step(4, "USER_INPUT", "continue"),
+    )
+
+    assert injects(run_agy_first_invocation(jj_workspace(tmp_path), transcript))
+
+
+def test_agy_does_not_repeat_a_preamble_reinjected_after_compaction(tmp_path):
+    transcript = write_transcript(
+        tmp_path,
+        step(1, "EPHEMERAL_MESSAGE", PREAMBLE),
+        step(2, "CHECKPOINT", "# Resuming from a compaction\n\nsummary"),
+        step(3, "EPHEMERAL_MESSAGE", PREAMBLE),
+        step(4, "PLANNER_RESPONSE", "hi"),
+        step(5, "USER_INPUT", "continue"),
+    )
+
+    assert run_agy_first_invocation(jj_workspace(tmp_path), transcript) == {}
+
+
+def test_agy_ignores_the_preamble_quoted_outside_an_ephemeral_message(tmp_path):
+    transcript = write_transcript(
+        tmp_path,
+        step(0, "USER_INPUT", PREAMBLE),
+        step(1, "PLANNER_RESPONSE", PREAMBLE),
+    )
+
+    assert injects(run_agy_first_invocation(jj_workspace(tmp_path), transcript))
+
+
+def test_agy_ignores_another_plugins_ephemeral_message(tmp_path):
+    transcript = write_transcript(
+        tmp_path, step(1, "EPHEMERAL_MESSAGE", "Some other plugin's guidance.")
+    )
+
+    assert injects(run_agy_first_invocation(jj_workspace(tmp_path), transcript))
+
+
+def test_agy_recognises_a_truncated_preamble(tmp_path):
+    transcript = write_transcript(
+        tmp_path,
+        step(1, "EPHEMERAL_MESSAGE", PREAMBLE[:60], truncated_fields=["content"]),
+    )
+
+    assert run_agy_first_invocation(jj_workspace(tmp_path), transcript) == {}
+
+
+def test_agy_injects_when_the_transcript_is_missing(tmp_path):
+    transcript = tmp_path / "missing.jsonl"
+
+    assert injects(run_agy_first_invocation(jj_workspace(tmp_path), transcript))
+
+
+@pytest.mark.parametrize(("ephemeral", "expected_inject"), [(PREAMBLE, False), ("other", True)])
+def test_agy_skips_garbage_transcript_lines(tmp_path, ephemeral, expected_inject):
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text(
+        json.dumps(step(1, "EPHEMERAL_MESSAGE", ephemeral))
+        + "\nnot json {\n[1, 2]\n"
+        + json.dumps(step(2, "USER_INPUT", "hello"))
+        + "\n"
+    )
+
+    response = run_agy_first_invocation(jj_workspace(tmp_path), transcript)
+
+    assert injects(response) is expected_inject
+    if not expected_inject:
+        assert response == {}
+
+
+def test_agy_injects_when_the_transcript_is_not_utf8(tmp_path):
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_bytes(
+        json.dumps(step(1, "EPHEMERAL_MESSAGE", PREAMBLE)).encode() + b"\n\xff\xfe\n"
+    )
+
+    assert injects(run_agy_first_invocation(jj_workspace(tmp_path), transcript))
+
+
+def test_agy_later_invocation_stays_silent_with_a_transcript(tmp_path):
+    transcript = write_transcript(tmp_path, step(0, "USER_INPUT", "hello"))
+
+    response = run_agy_first_invocation(jj_workspace(tmp_path), transcript, 1)
+
+    assert response == {}
+
+
 def hook_manifest_commands() -> list[str]:
     """Every distinct command the manifest runs, across all of its events."""
     manifest = json.loads((ROOT / "hooks" / "hooks.json").read_text())

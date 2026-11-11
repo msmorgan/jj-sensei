@@ -14,8 +14,8 @@ Agents still use the real `jj` CLI and learn its native model.
 ## What it does automatically
 
 When a session starts anywhere beneath a `.jj/` directory, jj-sensei injects
-a one-line preamble — in Antigravity, before the first model invocation of
-every user turn, since Antigravity numbers invocations afresh for each prompt.
+a one-line preamble — in Antigravity, before the first model invocation of a
+conversation and again after a context compaction, detected from the transcript.
 It positively names `jj` as the repository's exclusive version-control tool
 and has the agent load the `wisdom` skill once, before its first
 version-control command (status included). Context compaction evicts the

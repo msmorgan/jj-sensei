@@ -9,11 +9,15 @@ if [ ! -t 0 ]; then
 fi
 
 # AGY calls PreInvocation before every model invocation, and invocationNum
-# restarts at zero on every user prompt. The guide is therefore injected at the
-# first invocation of each user turn, not once per session; that repetition is
-# relied on to restore the instruction after context compaction. Later
-# invocations in a turn return an empty response. Claude's SessionStart payload
-# has no invocationNum.
+# restarts at zero on every user prompt, while injected steps persist in the
+# conversation. At invocation zero the guide is therefore injected only when the
+# conversation transcript (transcriptPath) shows no copy of it since the last
+# compaction: the newest CHECKPOINT or preamble EPHEMERAL_MESSAGE decides, so
+# copies do not accumulate across turns, and a compaction (whose checkpoint
+# replaces the history the model sees) brings the guide back. The transcript
+# format is undocumented, so any doubt about it falls back to injecting. Later
+# invocations in a turn, and invocations outside a jj workspace, return an empty
+# response. Claude's SessionStart payload has no invocationNum.
 agy_invocation=""
 if [ -n "$payload" ]; then
     agy_invocation=$(printf '%s' "$payload" | python3 -c '
@@ -54,15 +58,46 @@ while :; do
     if [ -d "$search_dir/.jj" ]; then
         if [ -f "$context_file" ]; then
             if [ -n "$agy_invocation" ]; then
-                python3 - "$context_file" <<'PY'
+                printf '%s' "$payload" | python3 -c '
 import json
 from pathlib import Path
 import sys
 
-print(json.dumps({
-    "injectSteps": [{"ephemeralMessage": Path(sys.argv[1]).read_text()}]
-}))
-PY
+
+def already_injected(opening):
+    # Newest decisive step wins: a preamble copy suppresses, a checkpoint does not.
+    try:
+        path = json.load(sys.stdin).get("transcriptPath")
+        with open(path, encoding="utf-8") as transcript:
+            lines = transcript.readlines()
+        for line in reversed(lines):
+            try:
+                step = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(step, dict):
+                continue
+            if step.get("type") == "CHECKPOINT":
+                return False
+            content = step.get("content")
+            if (
+                step.get("type") == "EPHEMERAL_MESSAGE"
+                and isinstance(content, str)
+                and content.lstrip().startswith(opening)
+            ):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+context = Path(sys.argv[1]).read_text()
+opening = context.lstrip()[:40]
+if opening and already_injected(opening):
+    print("{}")
+else:
+    print(json.dumps({"injectSteps": [{"ephemeralMessage": context}]}))
+' "$context_file"
             else
                 cat "$context_file"
             fi
