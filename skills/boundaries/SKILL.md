@@ -20,30 +20,25 @@ lock, and `80` means the workspace or topology needs human judgment. For `70`
 or `80`, present the helper's diagnosis and stop. These statuses belong to the
 helper; ordinary jj syntax and option errors do not invoke this protocol.
 
-The helper installs four readable repository revset aliases:
+The helper installs two repository revset aliases:
 
 ```toml
 [revset-aliases]
-"other_working_copies()" = "working_copies() ~ present(@)"
-"not_default()" = "present(@) ~ present(default@)"
-"only_if(condition, revisions)" = "revisions & descendants(ancestors(condition))"
-"immutable_heads()" = "builtin_immutable_heads() | only_if(not_default(), other_working_copies())"
+"protected_working_copies()" = "coalesce(present(@) & present(default@), working_copies()) ~ present(@)"
+"immutable_heads()" = "builtin_immutable_heads() | protected_working_copies()"
 ```
 
-`only_if` exploits that the ancestors of any nonempty revset include
-`root()`, whose descendants are `all()` — so it returns `revisions` when
-`condition` is nonempty and `none()` otherwise. `not_default()` is nonempty
-only outside the `default` workspace. Wrapping `@` and `default@` in
-`present(...)` keeps `immutable_heads()` evaluable when either working-copy
-commit is absent — for example at an earlier `--at-op` snapshot before a
-workspace existed, or if `default` has been renamed or forgotten.
-
-In `default`, the custom term collapses to `none()`, leaving only jj's
-built-in immutable heads and letting the coordinator rewrite feature stacks.
-Elsewhere, every other live working-copy commit becomes an immutable head,
-protecting it and its ancestors — a guardrail, not complete isolation:
-unrelated mutable changes outside another working copy's ancestry stay
-writable.
+In `default`, `present(@) & present(default@)` is nonempty (`default@`), so
+`coalesce` returns it and `~ present(@)` cancels it to `none()` — leaving only
+jj's built-in immutable heads and letting the coordinator rewrite feature
+stacks. Elsewhere, `present(@) & present(default@)` is `none()`, so `coalesce`
+falls through to `working_copies()` and `~ present(@)` leaves every other live
+working-copy commit as an immutable head, protecting it and its ancestors.
+Wrapping `@` and `default@` in `present(...)` keeps `immutable_heads()`
+evaluable when either working-copy commit is absent — for example at an earlier
+`--at-op` snapshot before a workspace existed, or if `default` has been renamed
+or forgotten. This is a guardrail, not complete isolation: unrelated mutable
+changes outside another working copy's ancestry stay writable.
 
 jj treats `::(immutable_heads() | root())` as immutable. Read the active
 definition and every alias behind it:

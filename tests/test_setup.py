@@ -166,8 +166,8 @@ def test_aliases_evaluate_at_op_before_workspace_existed(jj_repo):
 
 def test_aliases_protect_other_workspaces_when_default_is_absent(jj_repo):
     """If `default` is forgotten or renamed, `present(default@)` collapses to
-    `none()` so `not_default()` stays nonempty and other workspaces remain
-    protected rather than breaking revset evaluation."""
+    `none()` so `coalesce(...)` falls through to `working_copies()` and other
+    workspaces remain protected rather than breaking revset evaluation."""
     assert run_setup(jj_repo.root) == 0
     feature_a = jj_repo.add_workspace("feature-a")
     feature_b = jj_repo.add_workspace("feature-b")

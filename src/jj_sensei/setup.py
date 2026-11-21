@@ -18,13 +18,11 @@ from .repair import (
 )
 
 ALIASES = {
-    'revset-aliases."other_working_copies()"': "working_copies() ~ present(@)",
-    'revset-aliases."not_default()"': "present(@) ~ present(default@)",
-    'revset-aliases."only_if(condition, revisions)"': (
-        "revisions & descendants(ancestors(condition))"
+    'revset-aliases."protected_working_copies()"': (
+        "coalesce(present(@) & present(default@), working_copies()) ~ present(@)"
     ),
     'revset-aliases."immutable_heads()"': (
-        "builtin_immutable_heads() | only_if(not_default(), other_working_copies())"
+        "builtin_immutable_heads() | protected_working_copies()"
     ),
 }
 
@@ -124,7 +122,7 @@ def _verify_default_context(jj: Jj) -> None:
     # Check the term this setup adds, not `immutable_heads()` as a whole. A
     # workspace legitimately sitting on trunk or a tag is already a built-in
     # immutable head, and reporting that as a broken alias is a false alarm.
-    contributed = jj.commits("only_if(not_default(), other_working_copies())")
+    contributed = jj.commits("protected_working_copies()")
     if contributed:
         raise RuntimeError(
             "the alias does not collapse in default: default sees another workspace as an "
@@ -141,7 +139,7 @@ def _verify_aliases(jj: Jj) -> None:
             raise RuntimeError(
                 f"alias {key} is missing or differs; expected {expected!r}, found {actual!r}"
             )
-    print("setup: verified all four alias definitions.")
+    print("setup: verified both alias definitions.")
 
 
 def _report_orphaned(orphaned: list[Workspace]) -> None:
