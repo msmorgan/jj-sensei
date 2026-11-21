@@ -132,3 +132,75 @@ def test_setup_ignores_orphaned_workspaces_when_auditing_overlap(jj_repo):
     jj_repo.orphan_workspace("dead")
 
     assert workspace_overlaps(Jj(jj_repo.root)) == []
+
+
+def test_aliases_evaluate_at_op_before_workspace_existed(jj_repo):
+    """Evaluating `immutable_heads()` at an earlier operation where the current
+    workspace had no `@` must not fail."""
+    assert run_setup(jj_repo.root) == 0
+    before_op = jj_repo.run(
+        jj_repo.root,
+        "op",
+        "log",
+        "--no-graph",
+        "-n",
+        "1",
+        "-T",
+        "self.id()",
+    ).stdout.strip()
+
+    feature = jj_repo.add_workspace("feature")
+    result = jj_repo.run(
+        feature,
+        "log",
+        "--at-op",
+        before_op,
+        "--no-graph",
+        "-r",
+        "immutable_heads()",
+        "-T",
+        'change_id.short() ++ "\\n"',
+    )
+    assert result.returncode == 0
+
+
+def test_aliases_protect_other_workspaces_when_default_is_absent(jj_repo):
+    """If `default` is forgotten or renamed, `present(default@)` collapses to
+    `none()` so `not_default()` stays nonempty and other workspaces remain
+    protected rather than breaking revset evaluation."""
+    assert run_setup(jj_repo.root) == 0
+    feature_a = jj_repo.add_workspace("feature-a")
+    feature_b = jj_repo.add_workspace("feature-b")
+    jj_repo.run(feature_a, "workspace", "forget", "default")
+
+    protected = jj_repo.run(
+        feature_a,
+        "log",
+        "--no-graph",
+        "-r",
+        "working_copies() & immutable_heads()",
+        "-T",
+        'change_id.short() ++ "\\n"',
+    ).stdout.splitlines()
+    feature_b_id = jj_repo.run(
+        feature_b,
+        "log",
+        "--no-graph",
+        "-r",
+        "@",
+        "-T",
+        "change_id.short()",
+    ).stdout.strip()
+    assert protected == [feature_b_id]
+
+    blocked = jj_repo.run(
+        feature_a,
+        "describe",
+        "-r",
+        "feature-b@",
+        "-m",
+        "must remain blocked",
+        check=False,
+    )
+    assert blocked.returncode != 0
+    assert "immutable" in blocked.stderr

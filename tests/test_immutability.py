@@ -29,13 +29,13 @@ def test_unwrap_only_drops_parentheses_that_wrap_the_whole_expression():
 
 
 def test_clauses_expand_the_builtin_umbrella_alias():
-    expanded = clauses("builtin_immutable_heads() | other_workspaces()")
+    expanded = clauses("builtin_immutable_heads() | other_working_copies()")
 
     assert [clause.text for clause in expanded] == [
         "trunk()",
         "tags()",
         "untracked_remote_bookmarks()",
-        "other_workspaces()",
+        "other_working_copies()",
     ]
     assert expanded[0].origin == "builtin_immutable_heads()"
     assert expanded[3].origin is None

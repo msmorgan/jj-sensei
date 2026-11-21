@@ -18,13 +18,13 @@ from .repair import (
 )
 
 ALIASES = {
-    'revset-aliases."other_workspaces()"': "working_copies() ~ @",
-    'revset-aliases."not_default()"': "@ ~ default@",
+    'revset-aliases."other_working_copies()"': "working_copies() ~ present(@)",
+    'revset-aliases."not_default()"': "present(@) ~ present(default@)",
     'revset-aliases."only_if(condition, revisions)"': (
         "revisions & descendants(ancestors(condition))"
     ),
     'revset-aliases."immutable_heads()"': (
-        "builtin_immutable_heads() | only_if(not_default(), other_workspaces())"
+        "builtin_immutable_heads() | only_if(not_default(), other_working_copies())"
     ),
 }
 
@@ -53,7 +53,9 @@ def workspace_overlaps(jj: Jj) -> list[Overlap]:
     for left, right in itertools.combinations(workspaces, 2):
         safe_revision(left.commit_id)
         safe_revision(right.commit_id)
-        fork = jj.commits(f"fork_point({left.commit_id} | {right.commit_id}) ~ ancestors(default@)")
+        fork = jj.commits(
+            f"fork_point({left.commit_id} | {right.commit_id}) ~ ancestors(present(default@))"
+        )
         if fork:
             overlaps.append(
                 Overlap(
@@ -122,7 +124,7 @@ def _verify_default_context(jj: Jj) -> None:
     # Check the term this setup adds, not `immutable_heads()` as a whole. A
     # workspace legitimately sitting on trunk or a tag is already a built-in
     # immutable head, and reporting that as a broken alias is a false alarm.
-    contributed = jj.commits("only_if(not_default(), other_workspaces())")
+    contributed = jj.commits("only_if(not_default(), other_working_copies())")
     if contributed:
         raise RuntimeError(
             "the alias does not collapse in default: default sees another workspace as an "

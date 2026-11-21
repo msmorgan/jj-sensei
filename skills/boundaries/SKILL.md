@@ -24,16 +24,19 @@ The helper installs four readable repository revset aliases:
 
 ```toml
 [revset-aliases]
-"other_workspaces()" = "working_copies() ~ @"
-"not_default()" = "@ ~ default@"
+"other_working_copies()" = "working_copies() ~ present(@)"
+"not_default()" = "present(@) ~ present(default@)"
 "only_if(condition, revisions)" = "revisions & descendants(ancestors(condition))"
-"immutable_heads()" = "builtin_immutable_heads() | only_if(not_default(), other_workspaces())"
+"immutable_heads()" = "builtin_immutable_heads() | only_if(not_default(), other_working_copies())"
 ```
 
 `only_if` exploits that the ancestors of any nonempty revset include
 `root()`, whose descendants are `all()` — so it returns `revisions` when
 `condition` is nonempty and `none()` otherwise. `not_default()` is nonempty
-only outside the `default` workspace.
+only outside the `default` workspace. Wrapping `@` and `default@` in
+`present(...)` keeps `immutable_heads()` evaluable when either working-copy
+commit is absent — for example at an earlier `--at-op` snapshot before a
+workspace existed, or if `default` has been renamed or forgotten.
 
 In `default`, the custom term collapses to `none()`, leaving only jj's
 built-in immutable heads and letting the coordinator rewrite feature stacks.
